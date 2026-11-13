@@ -6,3 +6,4 @@ MakieHelpers = "769ed66a-a1e3-4c16-885f-a5b16fb973c2"
 
 [sources]
 AdaptivePort = {path = ".."}
+MakieHelpers = {url = "https://github.com/NilsNiggemann/MakieHelpers.jl.git"}
