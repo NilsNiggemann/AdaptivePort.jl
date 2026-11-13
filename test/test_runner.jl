@@ -96,4 +96,45 @@
         @test result(l).x == [0.0, 1.0]
         @test isempty(l.pending)
     end
+
+    @testset "learners with their own goal stop without tol" begin
+        for parallel in (false, true)
+            l = AverageLearner(seed -> 1 + randn(Random.Xoshiro(seed)); atol = 0.1)
+            r = BlockingRunner(l; parallel)
+            @test status(r) === :finished && done(l) && isempty(pending_points(l))
+            @test abs(result(l).mean - 1) < 0.5
+
+            l = IntegratorLearner(x -> exp(x); bounds = (0, 1), tol = 1e-10)
+            BlockingRunner(l; parallel)
+            # batches (parallel) may stop at a larger error than tol: upstream's done() does the same (checked against upstream)
+            @test done(l) && abs(result(l).integral - (exp(1) - 1)) <= result(l).error
+
+            seq = collect(1:20)
+            l = SequenceLearner(x -> x^2; sequence = seq, value_type = Int)
+            BlockingRunner(l; parallel, batch_size = 3)
+            @test done(l) && result(l).values == seq .^ 2
+        end
+        r = AsyncRunner(SequenceLearner(sqrt; sequence = [1.0, 4.0]))
+        @test status(wait(r)) === :finished
+        @test result(r.learner).values == [1.0, 2.0]
+        @test_throws ArgumentError BlockingRunner(Learner1D(identity; bounds = (0, 1)))
+    end
+
+    @testset "vector output and AverageLearner1D under runners" begin
+        for parallel in (false, true)
+            l = Learner1D(x -> (tanh(50x), sin(x)); bounds = (-1, 1), vdim = 2)
+            BlockingRunner(l; max_npoints = 60, parallel, batch_size = 4)
+            @test npoints(l) == 60 && result(l).y isa Vector{NTuple{2, Float64}}
+
+            l = Learner2D((x, y) -> (x * y, exp(-20 * (x^2 + y^2))); bounds = ((-1, 1), (-1, 1)), vdim = 2)
+            BlockingRunner(l; max_npoints = 40, parallel, batch_size = 4)
+            @test npoints(l) == 40 && allunique(result(l).points)
+
+            l = AverageLearner1D((seed, x) -> x^2 + 0.1 * randn(Random.Xoshiro(hash((seed, x)))); bounds = (-1, 1))
+            BlockingRunner(l; max_npoints = 15, parallel)
+            @test npoints(l) == 15 && nsamples(l) >= 15 * l.min_samples
+        end
+        l = AverageLearner1D((seed, x) -> x + 0.01 * randn(Random.Xoshiro(hash((seed, x)))); bounds = (-1, 1))
+        @test status(wait(AsyncRunner(l; max_npoints = 10))) === :finished
+    end
 end
