@@ -1,8 +1,11 @@
 [deps]
 AdaptivePort = "348dbb57-353b-4769-98f3-78004ac29d77"
+Bonito = "824d6782-a2ef-11e9-3a09-e5662e0c26f8"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DelaunayTriangulation = "927a84f5-c5f4-47a5-9785-b46e178433df"
 MakieHelpers = "769ed66a-a1e3-4c16-885f-a5b16fb973c2"
+NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 
 [sources]
 AdaptivePort = {path = ".."}

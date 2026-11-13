@@ -22,6 +22,15 @@ cells = simplices(learner)    # index tuples of length N + 1 into data.points
 
 `examples/learnernd.jl` is a longer version, including a vector-valued function.
 
+## Example: a distorted shell
+
+![LearnerND on a distorted spherical shell: a slab through the middle and a cutaway with Voronoi cuts](assets/learnernd_shell.png)
+
+5000 samples of a thin spherical shell whose radius is modulated sinusoidally in the angles. The samples
+concentrate on the shell. Left: the samples in the slab ``|z| < 0.1``. Right: the octant facing the camera is
+cut open, and its three bounding planes are coloured by the value of the nearest sample (Voronoi cuts of the
+data). `examples/learnernd_shell.jl` produces the figure with WGLMakie.
+
 ## Algorithm
 
 The evaluated points are kept in an incrementally updated Delaunay triangulation
