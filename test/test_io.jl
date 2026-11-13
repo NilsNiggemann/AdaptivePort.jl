@@ -8,11 +8,11 @@
     end
     # the learner keeps sampling after a reload
     function keeps_sampling(l)
-        n = npoints(l)
+        n = length(first(to_table(l)))
         pts = ask(l, 3)
         m = count(k -> startswith(string(k), r"(y|value)_"), keys(to_table(l)))
         foreach(p -> tell!(l, p, m == 0 ? 1.0 : ntuple(_ -> 1.0, m)), pts)
-        return !isempty(pts) && npoints(l) > n
+        return !isempty(pts) && length(first(to_table(l))) > n
     end
     leftovers(dir) = filter(!in(["data.csv", "data.jls"]), readdir(dir))
 
