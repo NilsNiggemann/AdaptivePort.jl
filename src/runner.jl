@@ -22,7 +22,7 @@ end
 """
     Runner{L<:AbstractLearner}
 
-Drives a learner: repeatedly asks it for a batch of points, evaluates the learner's function `learner.f` on them (`f(x)` in 1D, `f(x, y)` in 2D) and tells
+Drives a learner: repeatedly asks it for a batch of points, evaluates the learner's function `learner.f` on them as `f(x...)` (`f(x)` in 1D, `f(x, y)` in 2D) and tells
 the results back. Created by [`AsyncRunner`](@ref) or [`BlockingRunner`](@ref); it starts on construction.
 
 Fields: `learner` (inspect progress with `npoints(runner.learner)` and `loss(runner.learner)`), `cancelled` (set by
@@ -47,7 +47,8 @@ end
 Start learning `learner.f` in the background and return the [`Runner`](@ref) immediately.
 
 Each iteration asks for `batch_size` points with `tell_pending = false`, evaluates them, and tells every successful result
-back. The loop stops when `loss(learner) <= tol`, when `npoints(learner) >= max_npoints`, when `ask` returns no points
+back. The loop stops when `loss(learner) <= tol` (without `tol`: when `done(learner)`, for learners with their own
+stopping criterion), when `npoints(learner) >= max_npoints`, when `ask` returns no points
 (the learner is resolved to its numerical limit), after [`cancel!`](@ref), or when an evaluation throws.
 
 The loop runs in a task pinned to the caller's thread (`@async`), and the function evaluations run in tasks spawned on
@@ -85,19 +86,24 @@ end
     BlockingRunner(learner; tol = nothing, max_npoints = nothing, batch_size, parallel = false)
 
 Same as [`AsyncRunner`](@ref), but return only once the runner has stopped. Rethrows an [`EvaluationError`](@ref).
-At least one of `tol` and `max_npoints` is required, as upstream refuses to block forever.
+At least one of `tol` and `max_npoints` is required, as upstream refuses to block forever, unless the learner has its own
+stopping criterion (`AverageLearner`, `IntegratorLearner`, `SequenceLearner`).
 
 **Returns**
 - The finished [`Runner`](@ref).
 """
 function BlockingRunner(learner::AbstractLearner; tol = nothing, max_npoints = nothing, kwargs...)
-    if tol === nothing && max_npoints === nothing
+    if tol === nothing && max_npoints === nothing && !has_own_goal(learner)
         throw(ArgumentError("BlockingRunner needs a goal: pass tol and/or max_npoints"))
     end
     return wait(AsyncRunner(learner; tol, max_npoints, kwargs...))
 end
 
-goal_reached(l, tol, max_npoints) = (tol !== nothing && loss(l) <= tol) || (max_npoints !== nothing && npoints(l) >= max_npoints)
+function goal_reached(l, tol, max_npoints)
+    max_npoints !== nothing && npoints(l) >= max_npoints && return true
+    tol === nothing && return has_own_goal(l) && done(l)
+    return loss(l) <= tol
+end
 
 function try_evaluate(f, x)
     try
