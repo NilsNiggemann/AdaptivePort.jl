@@ -1,6 +1,6 @@
 # IntegratorLearner
 
-[`IntegratorLearner`](@ref) computes $\int_a^b f(x)\,dx$ by adaptive quadrature. It is a port of
+[`IntegratorLearner`](@ref) computes $\int_a^b f(x) \thinspace dx$ by adaptive quadrature. It is a port of
 upstream's learner, which implements Gonnet's doubly adaptive Clenshaw-Curtis scheme
 (algorithm 4 of "Increasing the Reliability of Adaptive Quadrature Using Explicit Partitioning").
 Points are plain numbers $x$.
