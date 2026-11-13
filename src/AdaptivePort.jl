@@ -107,6 +107,17 @@ Upstream's `ask`: up to `n` new points together with the expected loss improveme
 """
 function ask_with_improvements end
 
+"""
+    ask(learner, n; tell_pending = true)
+
+`Vector` of up to `n` new points to evaluate, never ones already evaluated or pending (fewer, or none, once the
+learner has reached its resolution). With `tell_pending = true` the points are marked pending, so further calls do
+not return them again before they are told; `false` only peeks. Returns the points only; use
+[`AdaptivePort.ask_with_improvements`](@ref) for upstream's pair with the loss improvements.
+
+**See Also**
+- [`tell!`](@ref), [`pending_points`](@ref)
+"""
 ask(l::AbstractLearner, n::Integer; tell_pending = true) = first(ask_with_improvements(l, n; tell_pending))
 
 """
