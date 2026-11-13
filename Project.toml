@@ -1,0 +1,7 @@
+name = "AdaptivePort"
+uuid = "348dbb57-353b-4769-98f3-78004ac29d77"
+version = "0.1.0"
+authors = ["Nils Niggemann"]
+
+[compat]
+julia = "1.10"
