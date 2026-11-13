@@ -282,7 +282,8 @@ open!(g::Gate, n = 1) = foreach(_ -> put!(g.release, nothing), 1:n)
 
             l = AverageLearner1D((seed, x) -> x^2 + 0.1 * randn(Random.Xoshiro(hash((seed, x)))); bounds = (-1, 1))
             BlockingRunner(l; max_npoints = 15, ntasks)
-            @test npoints(l) == 15 && nsamples(l) >= 15 * l.min_samples
+            # the run stops once the 15th x is told, possibly with samples of the newest points still in flight
+            @test npoints(l) == 15 && nsamples(l) >= (15 - ntasks) * l.min_samples
         end
         l = AverageLearner1D((seed, x) -> x + 0.01 * randn(Random.Xoshiro(hash((seed, x)))); bounds = (-1, 1))
         @test status(wait(AsyncRunner(l; max_npoints = 10))) === :finished

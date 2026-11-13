@@ -26,7 +26,8 @@ Evaluate on Distributed.jl worker processes: `executor(f, x)` is `remotecall(f, 
 Distributed` (package extension). `default_ntasks` is the number of workers in `pool`.
 
 `f` and everything it uses must be defined on the workers (`@everywhere`); only points and values travel. A
-`CachingPool` sends a closure to each worker once instead of on every call.
+`CachingPool` sends a closure to each worker once instead of on every call. An exception in `f` or a lost worker is
+reported as an [`EvaluationError`](@ref) (no retries).
 
 **See Also**
 - [`AsyncRunner`](@ref), [`ThreadedExecutor`](@ref)
