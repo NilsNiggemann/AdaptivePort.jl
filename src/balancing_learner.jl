@@ -112,6 +112,7 @@ function mark_pending!(l::IntegratorLearner, x)
     i === nothing || deleteat!(l.stack, i)
     return l
 end
+mark_pending!(s::DataSaver, x) = (mark_pending!(s.learner, x); s)
 
 finished(l::AbstractLearner) = has_own_goal(l) && done(l)
 
@@ -164,7 +165,7 @@ function next_point!(b::BalancingLearner, total, ::Val{:loss}, skip)
         score = (child_loss(b, i, false), -total[i])
         (best === nothing || score > best[2]) && (best = (i, score))
     end
-    return best === nothing ? nothing : ask_child!(b, best[1], skip)
+    return best === nothing ? nothing : ask_child!(b, best[1], total, skip)
 end
 
 function next_point!(b::BalancingLearner, total, ::Val{:npoints}, skip)
@@ -173,7 +174,7 @@ function next_point!(b::BalancingLearner, total, ::Val{:npoints}, skip)
         (i in skip || finished(b.learners[i])) && continue
         (best === nothing || total[i] < total[best]) && (best = i)
     end
-    return best === nothing ? nothing : ask_child!(b, best, skip)
+    return best === nothing ? nothing : ask_child!(b, best, total, skip)
 end
 
 function next_point!(b::BalancingLearner, total, ::Val{:cycle}, skip)
@@ -182,17 +183,17 @@ function next_point!(b::BalancingLearner, total, ::Val{:cycle}, skip)
         i = b.cycle_pos
         b.cycle_pos = mod1(i + 1, n)
         (i in skip || finished(b.learners[i])) && continue
-        return ask_child!(b, i, skip)
+        return ask_child!(b, i, total, skip)
     end
     return nothing
 end
 
 # One pending point from child `i`; a child with none left is added to `skip` and the choice is made again.
-function ask_child!(b::BalancingLearner, i, skip)
+function ask_child!(b::BalancingLearner, i, total, skip)
     points, improvements = ask_with_improvements(b.learners[i], 1)
     if isempty(points)
         push!(skip, i)
-        return next_point!(b, [0 for _ in b.learners], Val(b.strategy), skip)
+        return next_point!(b, total, Val(b.strategy), skip)
     end
     return i, points[1], improvements[1]
 end

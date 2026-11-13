@@ -166,6 +166,39 @@
         @test_throws ArgumentError load_data!(BalancingLearner([Learner1D(steep; bounds = (-1, 1))]), joinpath(dir, "b.jls"))
     end
 
+    @testset "npoints strategy keeps counts after skipping an exhausted child" begin
+        a = SequenceLearner(identity; sequence = [1])
+        x = SequenceLearner(identity; sequence = 1:5)
+        y = SequenceLearner(identity; sequence = 1:5)
+        ask(a, 1)  # a has nothing left to give but is not done
+        ask(x, 2)
+        ask(y, 1)
+        b = BalancingLearner([a, x, y]; strategy = :npoints)
+        @test first(only(ask(b, 1))) == 3  # totals (1, 2, 1): a is exhausted, y has fewer than x
+    end
+
+    @testset "children wrapped in DataSaver" begin
+        mk() = BalancingLearner([DataSaver(Learner1D(x -> (y = steep(x), aux = 2x); bounds = (-1, 1)); arg_picker = r -> r.y) for _ in 1:2])
+        b = mk()
+        BlockingRunner(b; max_npoints = 30)
+        @test npoints(b) == 30
+        @test sum(s -> length(extra_data(s)), b.learners) == 30
+        @test all(s -> all(((x, r),) -> r.aux == 2x, extra_data(s)), b.learners)
+        path = joinpath(mktempdir(), "ds.jls")
+        save_data(path, b)
+        b2 = load_data!(mk(), path)
+        @test to_table(b2) == to_table(b)
+        mki() = BalancingLearner([DataSaver(IntegratorLearner(x -> (y = x^2,); bounds = (0, 1)); arg_picker = r -> r.y) for _ in 1:2])
+        bi = mki()
+        BlockingRunner(bi; ntasks = 3, max_npoints = 40)
+        @test npoints(bi) == 40 && isempty(pending_points(bi))
+        stacks = [copy(s.learner.stack) for s in bi.learners]
+        ask(bi, 3; tell_pending = false)
+        @test [s.learner.stack for s in bi.learners] == stacks
+        pts = ask(bi, 3)
+        @test all(((i, x),) -> x ∉ bi.learners[i].learner.stack, pts)
+    end
+
     @testset "nesting-free helpers" begin
         b = BalancingLearner([Learner1D(steep; bounds = (-1, 1))])
         @test isempty(ask(b, 0))
