@@ -1,5 +1,3 @@
 using AdaptivePort, Test
 
-@testset "AdaptivePort" begin
-    @test AdaptivePort isa Module
-end
+include("test_learner1d.jl")
