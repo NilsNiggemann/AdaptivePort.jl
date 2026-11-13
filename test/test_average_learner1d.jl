@@ -46,26 +46,24 @@ end
 
     @testset "new x, pending points and loss(real = false) against upstream" begin
         l = AverageLearner1D(nothing; min_samples = 2)
-        # Tolerance 1e-3: Learner1D scales the changed intervals with its last-recomputed y-scale, upstream with the current
-        # one, which differs by 1.6e-4 here (the y-range grows by 2e-4 after the last full recompute).
         data = [(-1.0, [-1.0, -1.0001, -0.9999]), (0.0, [0.0, 0.0002, -0.0002]), (1.0, [1.0, 1.0001, 0.9998])]
         for (x, ys) in data, (s, y) in enumerate(ys)
             tell!(l, (s - 1, x), y)
         end
         @test result(l).error ≈ [0.0005730110893714369, 0.001146022178743, 0.0008752888970312385] rtol = 1e-10
-        @test loss(l) ≈ 1.1177657491138473 rtol = 1e-3
+        @test loss(l) ≈ 1.1177657491138473 rtol = 1e-12
         points, improvements = AdaptivePort.ask_with_improvements(l, 1; tell_pending = false)
         @test points == [(0, -0.5)]
-        @test improvements ≈ [0.5588828745569236] rtol = 1e-3
+        @test improvements ≈ [0.5588828745569236] rtol = 1e-12
         points, improvements = AdaptivePort.ask_with_improvements(l, 2; tell_pending = false)
         @test points == [(0, -0.5), (1, -0.5)]
-        @test improvements ≈ fill(0.2794414372784618, 2) rtol = 1e-3
+        @test improvements ≈ fill(0.2794414372784618, 2) rtol = 1e-12
         @test only(ask(l, 1)) == (0, -0.5)
-        @test loss(l; real = false) ≈ 0.5588828745569236 * 2 rtol = 1e-3  # one pending point halves the interval loss
+        @test loss(l; real = false) ≈ 0.7070596470191812 rtol = 1e-12  # (-1, 0) halved by the pending point; (0, 1) is now the worst
         @test only(ask(l, 1)) == (0, 0.5)
         @test pending_points(l) == [(0, -0.5), (0, 0.5)]
-        @test loss(l; real = false) ≈ 0.5588828745569236 rtol = 1e-3
-        @test loss(l) ≈ 1.1177657491138473 rtol = 1e-3
+        @test loss(l; real = false) ≈ 0.5588828745569236 rtol = 1e-12
+        @test loss(l) ≈ 1.1177657491138473 rtol = 1e-12
         tell!(l, (0, -0.5), -0.99)
         @test pending_points(l) == [(0, 0.5)] && npoints(l) == 4
         remove_unfinished!(l)

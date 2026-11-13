@@ -10,11 +10,11 @@ tracking the range.
 Fields: `f` (stored for future runners, never called), `bounds`, `loss_per_interval`, `dx_eps` (smallest
 splittable interval width, `2 * max(abs.(bounds)) * eps(T)` as upstream), `xs`/`ys` (evaluated points),
 `losses` (cached loss per interval), `pending` (points handed out by [`ask`](@ref) but not yet told),
-`yrange` (min and max of the finite told `ys`, per component for vector output) and `yscale` (y-scale the cached `losses` were computed with).
+`yrange` (min and max of the finite told `ys`, per component for vector output) and `yscale` (the y-range at the last full recomputation of `losses`).
 
 Invariants:
 - `xs` is strictly increasing, `length(ys) == length(xs)`.
-- `length(losses) == max(0, length(xs) - 1)`, `losses[i] == interval_loss(learner, i)` for the interval `(xs[i], xs[i+1])`, evaluated with the current `yscale`; it is `zero(T)` if the width is below `dx_eps`.
+- `length(losses) == max(0, length(xs) - 1)`, `losses[i]` is the loss of the interval `(xs[i], xs[i+1])`, evaluated with the y-range current when it was last computed (as upstream, losses of untouched intervals are not refreshed until the range more than doubles); it is `zero(T)` if the width is below `dx_eps`.
 - `maximum(yrange[2] .- yrange[1]) <= 2 * yscale` once two finite distinct `ys` exist: as upstream, all losses are recomputed only when the y-range more than doubles, so that `tell!` stays O(1) in loss evaluations.
 - `pending` is strictly increasing and disjoint from `xs`.
 - All `xs` and `pending` lie inside `bounds`.
@@ -128,7 +128,7 @@ function interval_loss(l::Learner1D, i)
     dx = l.xs[i+1] - l.xs[i]
     dx < l.dx_eps && return zero(dx)
     sx = xscale(l)
-    sy = iszero(l.yscale) ? one(sx) : l.yscale
+    sy = current_yscale(l)
     return l.loss_per_interval((l.xs[i] / sx, l.xs[i+1] / sx), (l.ys[i] ./ sy, l.ys[i+1] ./ sy))
 end
 
@@ -213,6 +213,12 @@ function widen_range(range, y)
 end
 
 spread(range) = maximum(range[2] .- range[1])
+
+# y-scale of newly computed losses: the current range, 1 while it is zero or empty (upstream `_scale_y`).
+function current_yscale(l::Learner1D)
+    s = spread(l.yrange)
+    return s > 0 ? s : one(s)
+end
 
 function insert_point!(l::Learner1D{T}, xt::T, yt) where {T}
     check_bounds(l, xt)
