@@ -66,7 +66,7 @@ using AdaptivePort
 f(x, y) = sin(5x) * cos(7y) + 0.3 * exp(-20 * ((x - 0.3)^2 + (y + 0.2)^2))
 learner = Learner2D(f; bounds=((-1, 1), (-0.75, 0.75)))
 
-while !done(learner; tol=0.01) && npoints(learner) < 2000
+while !done(learner; tol=0.01) && npoints(learner) < 3000
     points = ask(learner, 5)
     isempty(points) && break
     for (x, y) in points
