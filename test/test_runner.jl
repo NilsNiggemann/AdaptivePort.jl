@@ -130,11 +130,17 @@
             BlockingRunner(l; max_npoints = 40, parallel, batch_size = 4)
             @test npoints(l) == 40 && allunique(result(l).points)
 
+            l = LearnerND((x, y, z) -> tanh(10x) + y * z; bounds = ((-1, 1), (-1, 1), (-1, 1)))
+            BlockingRunner(l; max_npoints = 30, parallel, batch_size = 4)
+            @test npoints(l) == 30 && allunique(result(l).points) && isempty(pending_points(l))
+
             l = AverageLearner1D((seed, x) -> x^2 + 0.1 * randn(Random.Xoshiro(hash((seed, x)))); bounds = (-1, 1))
             BlockingRunner(l; max_npoints = 15, parallel)
             @test npoints(l) == 15 && nsamples(l) >= 15 * l.min_samples
         end
         l = AverageLearner1D((seed, x) -> x + 0.01 * randn(Random.Xoshiro(hash((seed, x)))); bounds = (-1, 1))
         @test status(wait(AsyncRunner(l; max_npoints = 10))) === :finished
+        l = LearnerND((x, y) -> (x, y^2); bounds = ((0, 1), (0, 1)), vdim = 2)
+        @test status(wait(AsyncRunner(l; max_npoints = 20))) === :finished && npoints(l) == 20
     end
 end
