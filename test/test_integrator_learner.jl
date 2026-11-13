@@ -258,7 +258,7 @@ end
         @test AdaptivePort.done(learner)
         @test result(learner).npoints == 191
         learner = IntegratorLearner(integrand_f21; bounds = (0, 1), tol = 1e-3)
-        BlockingRunner(learner; parallel = true, batch_size = 4)
+        BlockingRunner(learner; ntasks = 4)
         @test AdaptivePort.done(learner)
         @test abs(result(learner).integral - 0.16310022131213361) <= result(learner).error
     end

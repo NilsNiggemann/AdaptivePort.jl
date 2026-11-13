@@ -8,7 +8,7 @@ The points are `(index, element)` with a 1-based `index`.
 using AdaptivePort
 
 learner = SequenceLearner(length; sequence=["a", "bb", "ccc"], value_type=Int)
-BlockingRunner(learner; batch_size=2)
+BlockingRunner(learner; ntasks=2)
 
 data = result(learner)     # (indices, values) of the told elements
 data.values                # [1, 2, 3]

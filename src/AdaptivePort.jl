@@ -9,6 +9,7 @@ vector values; [`AverageLearner`](@ref) and [`AverageLearner1D`](@ref) for noisy
 """
 module AdaptivePort
 
+import Dates
 import DelaunayTriangulation as DT
 import LinearAlgebra
 import Random

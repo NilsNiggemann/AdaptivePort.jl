@@ -97,29 +97,32 @@ wait(runner)
 (`julia -t 4 --project=. examples/runners.jl`).
 
 - **Stopping.** `tol` stops once `loss(learner) <= tol`; `max_npoints` stops once the learner holds
-  that many points, and batches are cut short so that it is never exceeded. A runner also stops
-  when `ask` returns no points (the learner has reached its numerical resolution), so it cannot
-  spin forever. `BlockingRunner` requires at least one goal; an `AsyncRunner` without one runs until
-  [`cancel!`](@ref).
-- **Batches.** Each iteration asks for `batch_size` points (default 1, or `Threads.nthreads()` with
-  `parallel=true`), evaluates all of them, then tells all results. Points are requested with
-  `tell_pending=false`, so the learner never holds pending points that a failed or cancelled batch
-  would leave behind. Smaller batches are more adaptive.
-- **Parallel evaluation.** `parallel=true` evaluates the points of a batch in separate tasks
-  (`Threads.@spawn`). Start Julia with several threads (`julia -t auto`), and make sure `f` is safe
-  to call concurrently. The learner itself is never touched concurrently: only the runner loop
-  calls `ask` and `tell!`, after the whole batch has been evaluated.
+  that many points, and `npoints` plus the evaluations in flight never exceeds it; `duration`
+  (seconds or a `Dates.Period`) and `end_time` (a `DateTime`) stop at a deadline. A runner also
+  stops when `ask` returns no points and nothing is in flight (the learner has reached its numerical
+  resolution), so it cannot spin forever. `BlockingRunner` requires at least one goal; an
+  `AsyncRunner` without one runs until [`cancel!`](@ref).
+- **Refill per point.** The runner keeps `ntasks` evaluations in flight and asks for a new point
+  as soon as one finishes, so a slow point never holds back the others (upstream behaviour).
+- **Executors.** `executor` decides where `f` runs: any callable `executor(f, x)` returning a
+  `fetch`-able handle. The default [`ThreadedExecutor`](@ref) spawns on the threads of this process
+  with `ntasks = 1`; pass `ntasks = Threads.nthreads()` (and start Julia with `-t auto`) for a
+  threaded run, with an `f` that is safe to call concurrently. The learner itself is never touched
+  concurrently: only the runner loop calls `ask` and `tell!`.
+- **Checkpoints.** `checkpoint = path` saves the data with [`save_data`](@ref) every
+  `checkpoint_interval` seconds and when the runner stops.
 - **Asynchronous execution.** The runner loop is an `@async` task pinned to the caller's thread;
   evaluations run in spawned tasks. So the learner changes only when the caller yields (`sleep`,
   `wait`, I/O), and reading `runner.learner` from the calling task needs no lock. Do not read it from
   another thread while the runner is running.
 - **Progress.** [`status`](@ref) is `:running`, `:finished`, `:cancelled` or `:failed`; progress is
   `npoints(runner.learner)` and `loss(runner.learner)`.
-- **Errors.** If `f` throws, the rest of the batch is still evaluated and its successful results
-  are told; then the runner fails with an [`EvaluationError`](@ref) carrying the failing `point` and
-  the original exception with its backtrace. `wait(runner)` (and `BlockingRunner`) rethrows it.
-- **Cancellation.** [`cancel!`](@ref) stops the runner between batches: the batch in flight finishes
-  and is told first.
+- **Errors.** If `f` throws, results that already arrived are told; then the runner fails with an
+  [`EvaluationError`](@ref) carrying the failing `point` and the original exception with its
+  backtrace. `wait(runner)` (and `BlockingRunner`) rethrows it.
+- **Stopping, any reason.** [`cancel!`](@ref), a deadline, a goal or a failure stop the runner
+  immediately: evaluations still running are abandoned (they cannot be interrupted, and their
+  results are dropped), and `remove_unfinished!(learner)` clears their pending points.
 
 ## Pending points and the shared interface
 
@@ -285,7 +288,8 @@ All learners:
 
 - `result` is `(integral, error, npoints)`. Float64 only.
 - `ask(...; tell_pending = false)` re-queues the asked points (no snapshot); `tell!` drops told
-  points from the queue. `tell_pending!` and `remove_unfinished!` are no-ops, as upstream.
+  points from the queue. `tell_pending!` is a no-op, as upstream. `remove_unfinished!` re-queues the
+  asked but untold points (upstream: no-op, so abandoned points are never asked again).
 - `DivergentIntegralError` propagates unchanged from `tell!` and `ask`; upstream converts it in `ask`.
 - `ask` returns fewer than `n` points when the intervals run out and throws only when it has none.
 - Kept upstream limitation: if values are told out of order, or asked in batches (as the parallel
@@ -303,18 +307,15 @@ All learners:
 Runners:
 
 - One `Runner` type; `BlockingRunner` and `AsyncRunner` are functions that construct and start it.
-  Execution uses Julia tasks and threads instead of `concurrent.futures` executors; there is no
-  `executor`/`ntasks` argument, and distributed execution is not supported yet.
-- Batch-synchronous: a batch is evaluated completely before the next `ask`. Upstream refills an
-  executor slot as soon as one point finishes, which keeps workers busier when evaluation times vary.
-- Goals: only `tol` (`loss_goal`) and `max_npoints` (`npoints_goal`); no custom `goal` callable,
-  `end_time_goal` or `duration_goal`. `max_npoints` caps the batch size, so it is never overshot.
+- Executors are callables `executor(f, x)` returning a `fetch`-able handle, not `concurrent.futures`
+  executors. The default `ThreadedExecutor` runs with `ntasks = 1` (upstream: all cores), so `f`
+  need not be thread-safe unless `ntasks` is raised.
+- Goals: `tol`, `max_npoints`, `duration`, `end_time`; no custom `goal` callable. `npoints` plus the
+  evaluations in flight never exceeds `max_npoints`, so it is never overshot.
 - Errors: no `retries`; the first failure stops the runner with an `EvaluationError` after telling
-  the batch's successful results. Upstream wraps it in a `RuntimeError`.
-- `cancel!` takes effect between batches; upstream cancels the running futures and discards their
-  points.
+  the results that already arrived. Upstream wraps it in a `RuntimeError`.
 - Learners with their own goal stop without `tol`, and `BlockingRunner` accepts them without any goal.
-- No logging, saving, `overhead`, `elapsed_time` or live plotting.
+- No logging, `overhead`, `elapsed_time` or live plotting. Periodic saving is `checkpoint`.
 
 `Learner2D` additionally:
 

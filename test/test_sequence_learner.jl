@@ -45,7 +45,7 @@
         l = SequenceLearner(x -> (push!(seen, x); x + 1); sequence = [3, 1, 2])
         @test l.f(99, 5) == 6
         empty!(seen)
-        r = BlockingRunner(l; batch_size = 2)
+        r = BlockingRunner(l)  # ntasks = 1: evaluated in sequence order
         @test status(r) === :finished && seen == [3, 1, 2]
         @test result(l).values == [4, 2, 3]
     end
