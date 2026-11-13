@@ -12,15 +12,15 @@ sine_ring(x, y) = exp(-((hypot(x, y) - 0.55 * (1 + 0.35 * sin(4 * atan(y, x)))) 
 function sample(f; budget = 500)
     learner = Learner2D(f; bounds = ((-1.0, 1.0), (-1.0, 1.0)))
     while npoints(learner) < budget
-        for p in ask(learner, 10)
+        for p in ask(learner, min(10, budget - npoints(learner)))
             tell!(learner, p, f(p...))
         end
     end
     return result(learner)
 end
 
-budget = 800
-n = round(Int, sqrt(budget))
+budget = 28^2
+n = isqrt(budget)
 h = 2 / n
 centers = range(-1 + h / 2, 1 - h / 2; length = n)  # cells tile [-1, 1]^2 exactly
 
@@ -32,7 +32,7 @@ with_theme(theme_SimpleTicks(; publication = true)) do
         heatmap!(ax, centers, centers, f.(centers, centers'); colormap = :viridis, colorrange = (0, 1))
         push!(axs, ax)
 
-        data = sample(f; budget = n^2)
+        data = sample(f; budget)
         pts = data.points
         vorn = DT.voronoi(AdaptivePort.delaunay(pts); clip = true)
         cells = [Point2f.(DT.get_polygon_coordinates(vorn, j)) for j in eachindex(pts)]
