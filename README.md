@@ -1,4 +1,6 @@
 # AdaptivePort.jl
 
-This is a julia-exclusive port of the python library [Adaptive](https://adaptive.readthedocs.io/en/latest/).
-It is meant to be close in syntax to its original counterpart.
+[![CI](https://github.com/NilsNiggemann/AdaptivePort.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/NilsNiggemann/AdaptivePort.jl/actions/workflows/CI.yml)
+[![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://NilsNiggemann.github.io/AdaptivePort.jl/dev/)
+
+Placeholder.
