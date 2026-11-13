@@ -198,3 +198,47 @@ end
     @test l.losses[1] ≈ hypot(1.0, 1.0)
     @test_throws ArgumentError AdaptivePort.update_value!(l, 1.0, [1.0])
 end
+
+@testset "Learner1D loss(real = false) and ask_with_improvements" begin
+    for (f, vdim) in ((x -> tanh(50x), 1), (x -> (tanh(50x), x^2), 2))
+        l = Learner1D(f; bounds = (-1, 1), vdim)
+        @test loss(l; real = false) == Inf
+        pts, imp = AdaptivePort.ask_with_improvements(l, 2)
+        @test pts == [-1.0, 1.0] && imp == [Inf, Inf]
+        @test loss(l; real = false) == Inf  # bounds pending, no evaluated neighbours
+        foreach(x -> tell!(l, x, f(x)), pts)
+        pending_before = copy(l.pending)
+        for _ in 1:20
+            before = loss(l; real = false)
+            @test before <= loss(l)
+            (p,), (i,) = AdaptivePort.ask_with_improvements(l, 1; tell_pending = false)
+            @test l.pending == pending_before
+            @test i ≈ before / 2  # the largest priority is halved by the split
+            @test ask(l, 1; tell_pending = false) == [p]
+            tell_pending!(l, p)
+            @test loss(l; real = false) <= before
+            if length(l.pending) > 3
+                x = first(l.pending)
+                tell!(l, x, f(x))
+            end
+            pending_before = copy(l.pending)
+        end
+    end
+    # a pending point outside the evaluated range is an interval with infinite loss
+    l = Learner1D(zero; bounds = (0, 1))
+    tell!(l, 0.0, 0.0)
+    tell!(l, 0.01, 0.0)
+    tell_pending!(l, 1.0)
+    @test loss(l; real = false) == Inf
+    @test loss(l) == Inf
+    (p,), (i,) = AdaptivePort.ask_with_improvements(l, 1)
+    @test p ≈ 0.505 && i == Inf
+    # a pending point splits an interval's loss proportionally
+    l = Learner1D(x -> x^2; bounds = (0, 1))
+    foreach(x -> tell!(l, x, x^2), (0.0, 1.0))
+    L = loss(l)
+    tell_pending!(l, 0.25)
+    @test loss(l; real = false) ≈ 0.75 * L
+    @test loss(l) == L
+    @test ask(l, 3) isa Vector{Float64}
+end
