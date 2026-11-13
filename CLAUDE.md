@@ -27,10 +27,16 @@ Julia port of [Python Adaptive](https://github.com/python-adaptive/adaptive). St
   the `dy` term vanishes as `dx -> 0` and sampling degenerates to a uniform grid.
 - Check adaptivity with a steep function (`tanh(50x)`), not only with smooth ones.
 
-## Learner interface (as of stage 1, informal — no abstract type yet)
-`ask(learner, n; tell_pending=true) -> Vector`, `tell!(learner, x, y)`, `tell_pending!`,
-`loss(learner)`, `done(learner; tol)`, `npoints`, `result`. The learner never calls the function;
-the caller evaluates. Introduce `AbstractLearner` only when the second learner arrives.
+## Learner interface
+`AbstractLearner` (docstring in `src/AdaptivePort.jl` lists the contract): `ask(learner, n;
+tell_pending=true) -> Vector`, `tell!(learner, x, y)`, `tell_pending!`, `loss(learner)`, `npoints`,
+`result`; `done(learner; tol)` is generic. The learner never calls the function; the caller
+evaluates. 2D points are `NTuple{2,T}` throughout.
+- `Learner2D`: triangulation only via `src/triangulation.jl` (DelaunayTriangulation.jl, full
+  rebuild per `ask`/`loss`). `loss_per_triangle(points, values, triangles)` gets *scaled* points
+  (domain → `[-1/2,1/2]^2`) and raw values. `estimate_gradients` is a scipy port checked to 1e-14;
+  compare against upstream with `uv run --no-project --with adaptive python`.
 
 ## Stage status
 - Stage 1 (`Learner1D`, plan01): done. Open deviations are listed in `docs/src/index.md`.
+- Stage 2 (`Learner2D`, plan02): done.

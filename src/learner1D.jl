@@ -20,7 +20,7 @@ Construct with [`Learner1D(f; bounds)`](@ref Learner1D).
 **See Also**
 - [`ask`](@ref), [`tell!`](@ref), [`loss`](@ref), [`default_loss`](@ref)
 """
-mutable struct Learner1D{T<:AbstractFloat, F, L}
+mutable struct Learner1D{T<:AbstractFloat, F, L} <: AbstractLearner
     f::F
     bounds::Tuple{T, T}
     loss_per_interval::L
@@ -134,19 +134,6 @@ function loss(l::Learner1D{T}) where {T}
     end
     return worst
 end
-
-"""
-    done(learner; tol)
-
-Whether `loss(learner) <= tol`.
-
-**Keyword Arguments**
-- `tol`: loss tolerance; required because the loss scale depends on the loss function.
-
-**See Also**
-- [`loss`](@ref)
-"""
-done(l::Learner1D; tol) = loss(l) <= tol
 
 function check_bounds(l::Learner1D, x)
     if !(l.bounds[1] <= x <= l.bounds[2])
