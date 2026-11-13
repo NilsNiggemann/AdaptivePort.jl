@@ -17,7 +17,7 @@ import StatsFuns
 export AbstractLearner, ask, tell!, tell_pending!, loss, done, result, npoints, pending_points, remove_unfinished!
 export Learner1D, Learner2D, default_loss, triangles
 export LearnerND, default_loss_nd, uniform_loss_nd, std_loss_nd, simplices
-export AverageLearner, AverageLearner1D, nsamples, IntegratorLearner, SequenceLearner
+export AverageLearner, AverageLearner1D, nsamples, IntegratorLearner, DivergentIntegralError, SequenceLearner
 export Runner, AsyncRunner, BlockingRunner, EvaluationError, status, cancel!
 
 """
