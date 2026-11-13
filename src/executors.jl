@@ -39,8 +39,11 @@ end
     DaggerExecutor(; options...)
 
 Evaluate through Dagger.jl's scheduler, which spreads work over the threads and Distributed workers it knows:
-`executor(f, x)` is `Dagger.@spawn f(x...)`. Needs `using Dagger` (package extension). `default_ntasks` is the number of
-Dagger processors.
+`executor(f, x)` is `Dagger.spawn(f, options, x...)`. Needs `using Dagger` (package extension).
+
+Keywords are passed to `Dagger.Options` (e.g. `scope`) and apply to every evaluation. `default_ntasks` is
+`Dagger.num_processors(scope)`, the threads of all processes Dagger knows. Workers added after Dagger's scheduler
+started must be registered with `Dagger.addprocs!(Dagger.Sch.eager_context(), workers())`.
 
 **See Also**
 - [`AsyncRunner`](@ref), [`ThreadedExecutor`](@ref)
