@@ -132,13 +132,30 @@ function triangles(l::Learner2D)
     return [map(v -> idx[v], t) for t in delaunay_triangles(pts)]
 end
 
-function loss(l::Learner2D{T}) where {T}
+"""
+    loss(learner::Learner2D; real = true)
+
+Largest per-triangle loss of the triangulation of the evaluated points, or `Inf` until all four corners are evaluated or while no triangle exists.
+
+With `real = false` the pending points are triangulated too, with values interpolated from the evaluated data (upstream `loss(real=False)`), so the result is the loss the learner expects once the pending points are told.
+
+**See Also**
+- [`done`](@ref)
+"""
+function loss(l::Learner2D{T}; real = true) where {T}
     corners_done(l) || return T(Inf)
-    _, pts, vals = finite_data(l)
+    pts, vals = real ? finite_data(l)[2:3] : combined_data(l, ())
     ts = delaunay_triangles(pts)
     isempty(ts) && return T(Inf)
     # ponytail: rebuilds the triangulation on every call, cache it per tell! if loss() shows up in profiles
     return T(maximum(l.loss_per_triangle(pts, vals, ts)))
+end
+
+pending_points(l::Learner2D) = copy(l.pending)
+
+function remove_unfinished!(l::Learner2D)
+    empty!(l.pending)
+    return l
 end
 
 function tell_pending!(l::Learner2D, p::Tuple{Real, Real})
@@ -171,13 +188,15 @@ function tell!(l::Learner2D, p::Tuple{Real, Real}, z)
 end
 
 """
-    ask(learner::Learner2D, n; tell_pending = true)
+    ask_with_improvements(learner::Learner2D, n; tell_pending = true)
 
-Propose up to `n` new points `(x, y)` to evaluate, as a `Vector`.
+Propose up to `n` new points `(x, y)` to evaluate, with the loss improvement of each; [`ask`](@ref) returns the points only.
 
 Corners that are neither evaluated nor pending come first. The rest follows upstream's `_fill_stack`: triangulate the evaluated points together with the pending and already chosen points (whose values are linearly interpolated from the evaluated data, or zero while a corner is unevaluated), rank the triangles by `loss_per_triangle`, and take one point from each of the highest-loss triangles (see `choose_point_in_triangle`). If that yields too few points, the triangulation is rebuilt with the new points and the step repeats. Candidates that coincide with a known point are skipped; fewer than `n` points (possibly none) are returned when no new candidate exists.
 
-Deviation from upstream: no persistent point stack (`stack_size`); every call recomputes, and only the points are returned, not their loss improvements.
+The improvement of a point is the loss of the triangle it was taken from; corners get `Inf`, as upstream.
+
+Deviation from upstream: no persistent point stack (`stack_size`); every call recomputes.
 
 **Arguments**
 - `learner`: the [`Learner2D`](@ref).
@@ -185,23 +204,30 @@ Deviation from upstream: no persistent point stack (`stack_size`); every call re
 
 **Keyword Arguments**
 - `tell_pending`: register the returned points via [`tell_pending!`](@ref). Default `true`, so that repeated calls never return the same point twice.
+
+**Returns**
+- `(points, improvements)`.
 """
-function ask(l::Learner2D{T}, n::Integer; tell_pending = true) where {T}
+function ask_with_improvements(l::Learner2D{T}, n::Integer; tell_pending = true) where {T}
     n < 0 && throw(ArgumentError("n must be non-negative, got $n"))
     points = NTuple{2, T}[]
+    improvements = T[]
     for c in corners(l)
         length(points) >= n && break
-        isknown(l, c) || push!(points, c)
+        if !isknown(l, c)
+            push!(points, c)
+            push!(improvements, T(Inf))
+        end
     end
     while length(points) < n
-        choose_points!(points, l, n - length(points)) == 0 && break
+        choose_points!(points, improvements, l, n - length(points)) == 0 && break
     end
     if tell_pending
         for p in points
             tell_pending!(l, p)
         end
     end
-    return points
+    return points, improvements
 end
 
 # Scaled points and values of the evaluated, pending and `chosen` points (upstream `_data_combined`).
@@ -225,8 +251,8 @@ function interpolate_values(tri, vals::Vector{<:Tuple}, qs)
     return [map(vc -> interpolate_linear(tri, vc, q), comps) for q in qs]
 end
 
-# Append up to `m` new points to `chosen`, one per triangle in order of decreasing loss. Returns the number added.
-function choose_points!(chosen, l::Learner2D, m)
+# Append up to `m` new points to `chosen` (and the loss of their triangles to `improvements`), one per triangle in order of decreasing loss. Returns the number added.
+function choose_points!(chosen, improvements, l::Learner2D, m)
     pts, vals = combined_data(l, chosen)
     ts = delaunay_triangles(pts)
     isempty(ts) && return 0
@@ -239,6 +265,7 @@ function choose_points!(chosen, l::Learner2D, m)
         p = clip(l, unscale(l, choose_point_in_triangle(pts[i], pts[j], pts[k])))
         if !isknown(l, p) && !(p in chosen)
             push!(chosen, p)
+            push!(improvements, losses[t])
             added += 1
         end
     end

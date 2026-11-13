@@ -229,3 +229,36 @@ end
     # the vector deviation is the sum of the component deviations at a common normalisation
     @test AdaptivePort.deviations(p, v, ts) ≈ sum(c -> AdaptivePort.component_deviations(p, comp(c) ./ range_max, ts), 1:3)
 end
+
+@testset "Learner2D loss(real = false) and ask_with_improvements" begin
+    f(x, y) = tanh(10 * (x + y - 0.3)) + x * y
+    for (g, vdim) in (((x, y) -> f(x, y), 1), ((x, y) -> (f(x, y), x * y), 2))
+        l = Learner2D(g; bounds = ((-1, 1), (-1, 1)), vdim)
+        @test loss(l; real = false) == Inf
+        pts, imp = AdaptivePort.ask_with_improvements(l, 4)
+        @test length(pts) == 4 && all(==(Inf), imp)
+        @test loss(l; real = false) == Inf
+        foreach(p -> tell!(l, p, g(p...)), pts)
+        tell!(l, (0.13, -0.21), g(0.13, -0.21))
+        queue = []
+        for _ in 1:12
+            before = loss(l; real = false)
+            pending_before = copy(l.pending)
+            (p,), (i,) = AdaptivePort.ask_with_improvements(l, 1; tell_pending = false)
+            @test l.pending == pending_before
+            @test i ≈ before  # the point comes from the triangle of the largest loss
+            @test ask(l, 1; tell_pending = false) == [p]
+            tell_pending!(l, p)
+            push!(queue, p)
+            length(queue) > 2 && tell!(l, first(queue), g(popfirst!(queue)...))
+        end
+        @test isfinite(loss(l; real = false))
+        # without pending points both losses agree
+        empty!(l.pending)
+        @test loss(l; real = false) ≈ loss(l)
+    end
+    l = Learner2D(f; bounds = ((0, 2), (0, 1)))
+    @test loss(l; real = false) == Inf
+    pts, imp = AdaptivePort.ask_with_improvements(l, 2)
+    @test imp == [Inf, Inf] && ask(l, 3) isa Vector{NTuple{2,Float64}}
+end

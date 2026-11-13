@@ -1,45 +1,10 @@
 # Data export (`to_table`) and saving (`save_data`, `load_data!`). Per-learner methods live here so that the
 # learner files stay unaware of file formats.
 
-"""
-    to_table(learner)
-
-The told evaluations of `learner` as a named tuple of equal-length vectors, one row per evaluation (upstream
-`to_dataframe`). It is a Tables.jl column table, so `DataFrame(to_table(l))` works without this package depending on
-DataFrames. Never mutates `learner`; pending points are not included.
-
-**Columns**
-- [`Learner1D`](@ref): `x, y` (sorted by `x`); vector output `x, y_1, ..., y_M`.
-- [`Learner2D`](@ref): `x, y, value` in tell order; vector output `value_1, ..., value_M`.
-- [`LearnerND`](@ref): `x, y, z` for `N <= 3`, else `x_1, ..., x_N`; then `value` or `value_1, ...`; tell order.
-- [`AverageLearner`](@ref): `seed, y`. [`AverageLearner1D`](@ref): `seed, x, y`, one row per sample.
-- [`IntegratorLearner`](@ref): `x, y`. [`SequenceLearner`](@ref): `index, x, y` (1-based `index`; upstream's `i` is 0-based).
-
-**See Also**
-- [`save_data`](@ref), [`load_data!`](@ref)
-"""
-function to_table end
-
-"""
-    table_rows(learner, table)
-
-Iterator of `(point, value)` pairs of a table with the columns of `to_table(learner)`, such that `tell!(learner, point,
-value)` replays it. Used by [`load_table!`](@ref).
-"""
-function table_rows end
-
-"""
-    load_table!(learner, table)
-
-Replay the rows of `table` (columns as in [`to_table`](@ref)) into `learner` with `tell!`; returns `learner`. The generic
-method suffices where `tell!` accepts arbitrary data; learners that cannot replay arbitrary data override it.
-"""
-function load_table!(l::AbstractLearner, table)
-    for (point, value) in table_rows(l, table)
-        tell!(l, point, value)
-    end
-    return l
-end
+# Columns of `to_table` (declared in AdaptivePort.jl):
+#   Learner1D `x, y` (sorted by x; vector output `y_1..y_M`), Learner2D `x, y, value`, LearnerND `x, y, z` (N <= 3) or
+#   `x_1..x_N`, then `value`; the 2D/ND tables are in tell order. AverageLearner `seed, y`, AverageLearner1D
+#   `seed, x, y` (one row per sample), IntegratorLearner `x, y`, SequenceLearner `index, x, y` (1-based).
 
 """
     save_data(path, learner)
