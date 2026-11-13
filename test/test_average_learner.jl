@@ -101,3 +101,11 @@ using Random
         @test npoints(l) < 1000
     end
 end
+
+@testset "AverageLearner loss with only pending points" begin
+    l = AverageLearner(identity; atol = 0.1)
+    ask(l, 3)
+    @test loss(l; real = false) == Inf
+    tell!(l, 0, 1.0)
+    @test loss(l; real = false) == Inf
+end

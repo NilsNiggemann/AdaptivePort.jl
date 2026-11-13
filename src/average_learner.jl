@@ -49,7 +49,8 @@ end
 
 # Loss if the standard deviation and mean stay as they are but there were `n` samples.
 function loss_at(l::AverageLearner, n)
-    n < l.min_npoints && return Inf
+    # too few told samples: std is Inf (upstream gives Inf too, or divides by zero with none told)
+    (n < l.min_npoints || npoints(l) < l.min_npoints) && return Inf
     standard_error = sample_std(l) / sqrt(n)
     mean = l.sum_f / npoints(l)
     aloss = standard_error / l.atol
