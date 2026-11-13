@@ -19,7 +19,7 @@ function sample(f; budget = 500)
     return result(learner)
 end
 
-budget = 500
+budget = 800
 n = round(Int, sqrt(budget))
 h = 2 / n
 centers = range(-1 + h / 2, 1 - h / 2; length = n)  # cells tile [-1, 1]^2 exactly
