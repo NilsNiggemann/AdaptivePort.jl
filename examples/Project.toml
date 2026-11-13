@@ -1,7 +1,10 @@
 [deps]
 AdaptivePort = "348dbb57-353b-4769-98f3-78004ac29d77"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Dagger = "d58978e5-989f-55fb-8d15-ea34adc7bf54"
 DelaunayTriangulation = "927a84f5-c5f4-47a5-9785-b46e178433df"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 MakieHelpers = "769ed66a-a1e3-4c16-885f-a5b16fb973c2"
 NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
 
