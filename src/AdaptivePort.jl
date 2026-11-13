@@ -12,13 +12,15 @@ module AdaptivePort
 import DelaunayTriangulation as DT
 import LinearAlgebra
 import Random
+import Serialization
 import StatsFuns
 
 export AbstractLearner, ask, tell!, tell_pending!, loss, done, result, npoints, pending_points, remove_unfinished!
 export Learner1D, Learner2D, default_loss, triangles
 export LearnerND, default_loss_nd, uniform_loss_nd, std_loss_nd, simplices
 export AverageLearner, AverageLearner1D, nsamples, IntegratorLearner, DivergentIntegralError, SequenceLearner
-export Runner, AsyncRunner, BlockingRunner, EvaluationError, status, cancel!
+export to_table, table_rows, load_table!, save_data, load_data!
+export Runner,AsyncRunner, BlockingRunner, EvaluationError, status, cancel!
 
 """
     AbstractLearner
@@ -110,6 +112,7 @@ include("average_learner1D.jl")
 include("integrator_coeffs.jl")
 include("integrator_learner.jl")
 include("sequence_learner.jl")
+include("io.jl")
 include("runner.jl")
 
 end
