@@ -133,24 +133,53 @@ function interval_loss(l::Learner1D, i)
 end
 
 """
-    loss(learner)
+    loss(learner; real = true)
 
 Current loss of `learner`: the largest interval priority, or `Inf` while a bound is not yet evaluated.
 
-Intervals whose loss is `NaN` or infinite are ranked by their width instead, like upstream.
+Intervals whose loss is `NaN` or infinite are ranked by their width instead, like upstream. With `real = false` pending points count as well (upstream `loss(real=False)`): the loss of an interval split by pending points is shared proportionally to the widths of its parts, a part without evaluated neighbour on both sides has loss `Inf`, and the result is `Inf` while a bound is neither evaluated nor pending or fewer than two points are known.
 
 **See Also**
 - [`done`](@ref), [`default_loss`](@ref)
 """
-function loss(l::Learner1D{T}) where {T}
-    if isempty(l.xs) || l.xs[1] != l.bounds[1] || l.xs[end] != l.bounds[2]
-        return T(Inf)
+function loss(l::Learner1D{T}; real = true) where {T}
+    if real
+        if isempty(l.xs) || l.xs[1] != l.bounds[1] || l.xs[end] != l.bounds[2]
+            return T(Inf)
+        end
+        worst = zero(T)
+        for i in eachindex(l.losses)
+            worst = max(worst, priority(l, l.losses[i], l.xs[i+1] - l.xs[i]))
+        end
+        return worst
     end
-    worst = zero(T)
-    for i in eachindex(l.losses)
-        worst = max(worst, priority(l, l.losses[i], l.xs[i+1] - l.xs[i]))
+    missing_bound(b) = !insorted(b, l.xs) && !insorted(b, l.pending)
+    any(missing_bound, l.bounds) && return T(Inf)
+    _, _, prios, unknown = combined_intervals(l, T[])
+    isempty(prios) && return T(Inf)
+    k = argmax(prios)
+    return unknown[k] ? T(Inf) : prios[k]
+end
+
+# Intervals (ls[k], rs[k]) of the evaluated, pending and extra points with their pending-aware priorities.
+# unknown[k] marks intervals without an evaluated neighbour on both sides (upstream loss Inf, ranked by width).
+function combined_intervals(l::Learner1D{T}, extra) where {T}
+    combined = sort!(vcat(l.xs, l.pending, extra))
+    ls = combined[1:end-1]
+    rs = combined[2:end]
+    prios = similar(ls)
+    unknown = falses(length(ls))
+    for k in eachindex(ls)
+        j = searchsortedlast(l.xs, ls[k])
+        if 1 <= j < length(l.xs) && rs[k] <= l.xs[j+1]
+            dx = l.xs[j+1] - l.xs[j]
+            prios[k] = priority(l, l.losses[j], dx) * (rs[k] - ls[k]) / dx
+        else
+            prios[k] = (rs[k] - ls[k]) / xscale(l)
+            unknown[k] = true
+        end
     end
-    return worst
+    return ls, rs, prios, unknown
 end
 
 function check_bounds(l::Learner1D, x)
@@ -280,13 +309,13 @@ function overwrite_point!(l::Learner1D, xt, yt)
 end
 
 """
-    ask(learner, n; tell_pending = true)
+    ask_with_improvements(learner::Learner1D, n; tell_pending = true)
 
-Propose up to `n` new points to evaluate, as a `Vector`.
+Propose up to `n` new points to evaluate, with the loss improvement of each; [`ask`](@ref) returns the points only.
 
 Unevaluated and non-pending bounds come first (ascending). The rest is greedy bisection: the interval of `xs`, `pending` and chosen bounds with the highest priority is split at its midpoint, repeatedly. Pending points inside an evaluated interval take a proportional share of its loss, as upstream. Fewer than `n` points (possibly none) are returned once every interval is narrower than `dx_eps`.
 
-Deviation from upstream (provisional): upstream returns `(points, loss_improvements)` and subdivides one interval into equal parts; this returns the points only.
+Deviation from upstream: upstream subdivides one interval into equal parts; this bisects greedily, so for `n > 1` the points and improvements differ from upstream (identical for `n = 1`).
 
 **Arguments**
 - `learner`: the [`Learner1D`](@ref).
@@ -296,35 +325,24 @@ Deviation from upstream (provisional): upstream returns `(points, loss_improveme
 - `tell_pending`: register the returned points via [`tell_pending!`](@ref). Default `true`, so that repeated calls never return the same point twice.
 
 **Returns**
-- The proposed points; bounds first, then in the order chosen.
+- `(points, improvements)`; bounds first (improvement `Inf`), then in the order chosen. The improvement of a point is the priority of the half-interval it creates (half the priority of the interval it splits, as upstream), `Inf` if that interval has no evaluated neighbour on both sides.
 
 **See Also**
 - [`tell!`](@ref), [`tell_pending!`](@ref)
 """
-function ask(l::Learner1D{T}, n::Integer; tell_pending = true) where {T}
+function ask_with_improvements(l::Learner1D{T}, n::Integer; tell_pending = true) where {T}
     n < 0 && throw(ArgumentError("n must be non-negative, got $n"))
     points = T[]
+    improvements = T[]
     for b in l.bounds
         length(points) >= n && break
         if !insorted(b, l.xs) && !insorted(b, l.pending)
             push!(points, b)
+            push!(improvements, T(Inf))
         end
     end
     if length(points) < n
-        # Candidate intervals (ls[k], rs[k]) of the combined point set with their priorities.
-        combined = sort!(vcat(l.xs, l.pending, points))
-        ls = combined[1:end-1]
-        rs = combined[2:end]
-        prios = similar(ls)
-        for k in eachindex(ls)
-            j = searchsortedlast(l.xs, ls[k])
-            if 1 <= j < length(l.xs) && rs[k] <= l.xs[j+1]
-                dx = l.xs[j+1] - l.xs[j]
-                prios[k] = priority(l, l.losses[j], dx) * (rs[k] - ls[k]) / dx
-            else
-                prios[k] = (rs[k] - ls[k]) / xscale(l)
-            end
-        end
+        ls, rs, prios, unknown = combined_intervals(l, points)
         while length(points) < n
             # ponytail: O(n*m) scan for the best interval, use a heap if n*m gets large
             best = 0
@@ -339,9 +357,11 @@ function ask(l::Learner1D{T}, n::Integer; tell_pending = true) where {T}
             m = ls[best] + (rs[best] - ls[best]) / 2
             push!(points, m)
             prios[best] /= 2
+            push!(improvements, unknown[best] ? T(Inf) : prios[best])
             insert!(ls, best + 1, m)
             insert!(rs, best + 1, rs[best])
             insert!(prios, best + 1, prios[best])
+            insert!(unknown, best + 1, unknown[best])
             rs[best] = m
         end
     end
@@ -350,5 +370,5 @@ function ask(l::Learner1D{T}, n::Integer; tell_pending = true) where {T}
             tell_pending!(l, x)
         end
     end
-    return points
+    return points, improvements
 end
