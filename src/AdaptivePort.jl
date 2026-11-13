@@ -23,6 +23,7 @@ export AverageLearner, AverageLearner1D, nsamples, IntegratorLearner, DivergentI
 export Runner, AsyncRunner, BlockingRunner, EvaluationError, status, cancel!
 export ThreadedExecutor, DistributedExecutor, DaggerExecutor, MPIExecutor, default_ntasks
 export to_table, save_data, load_data!
+export DataSaver, extra_data
 
 """
     AbstractLearner
@@ -161,6 +162,7 @@ include("average_learner1D.jl")
 include("integrator_coeffs.jl")
 include("integrator_learner.jl")
 include("sequence_learner.jl")
+include("data_saver.jl")
 include("io.jl")
 include("runner.jl")
 
