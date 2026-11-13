@@ -1,7 +1,7 @@
 """
     AdaptivePort
 
-Julia port of Python Adaptive: adaptive sampling of scalar functions through an `ask`/`tell!` interface. Provides [`Learner1D`](@ref) (interval) and [`Learner2D`](@ref) (rectangle).
+Julia port of Python Adaptive: adaptive sampling of scalar functions through an `ask`/`tell!` interface. Provides [`Learner1D`](@ref) (interval) and [`Learner2D`](@ref) (rectangle), and runners ([`BlockingRunner`](@ref), [`AsyncRunner`](@ref)) that evaluate the function for you.
 """
 module AdaptivePort
 
@@ -9,6 +9,7 @@ import DelaunayTriangulation as DT
 import Random
 
 export AbstractLearner, Learner1D, Learner2D, ask, tell!, tell_pending!, loss, done, result, npoints, default_loss, triangles
+export Runner, AsyncRunner, BlockingRunner, EvaluationError, status, cancel!
 
 """
     AbstractLearner
@@ -22,6 +23,7 @@ Adaptive sampler of a function the caller evaluates: the learner proposes points
 - `loss(learner)`: largest remaining loss, `Inf` until the learner covers its domain.
 - `npoints(learner)`: number of evaluated points.
 - `result(learner)`: copies of the evaluated data as a named tuple.
+- field `f`: the function, called by runners as `f(x...)` on a point `x` from `ask`.
 
 **Interface (optional)**
 - `done(learner; tol)`: defaults to `loss(learner) <= tol`.
@@ -44,5 +46,6 @@ done(l::AbstractLearner; tol) = loss(l) <= tol
 include("learner1D.jl")
 include("triangulation.jl")
 include("learner2D.jl")
+include("runner.jl")
 
 end

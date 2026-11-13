@@ -40,3 +40,6 @@ evaluates. 2D points are `NTuple{2,T}` throughout.
 ## Stage status
 - Stage 1 (`Learner1D`, plan01): done. Open deviations are listed in `docs/src/index.md`.
 - Stage 2 (`Learner2D`, plan02): done.
+- Stage 3 (runners, plan03): done. `src/runner.jl`: one `Runner` (loop in an `@async` task sticky to the
+  caller's thread, evaluations in `Threads.@spawn`ed tasks), built by `BlockingRunner`/`AsyncRunner`.
+  Only the runner loop calls `ask`/`tell!`; it asks with `tell_pending=false`.

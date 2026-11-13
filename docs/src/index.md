@@ -44,6 +44,51 @@ Uniform versus adaptive sampling of three sharp functions with the same number o
   `done(learner; tol)` is `loss(learner) <= tol`.
 - `result(learner)` returns `(x, y)` copies sorted by `x`; `npoints(learner)` counts them.
 
+## Runners
+
+A runner does the `ask` → evaluate → `tell!` loop for you, using the function stored in the
+learner (`f(x)` for [`Learner1D`](@ref), `f(x, y)` for [`Learner2D`](@ref)): construct a learner,
+construct a runner, wait, then read the result. Learners decide *where* to sample; runners decide
+*when and how* to evaluate. The manual loop above stays fully supported.
+
+```julia
+learner = Learner1D(f; bounds=(-1, 1))
+runner = BlockingRunner(learner; tol=0.02, max_npoints=500)   # returns when done
+data = result(learner)
+
+runner = AsyncRunner(learner; tol=0.01)   # returns immediately
+# ... other work ...
+wait(runner)
+```
+
+`examples/runners.jl` shows blocking, asynchronous and parallel runs
+(`julia -t 4 --project=. examples/runners.jl`).
+
+- **Stopping.** `tol` stops once `loss(learner) <= tol`; `max_npoints` stops once the learner holds
+  that many points, and batches are cut short so that it is never exceeded. A runner also stops
+  when `ask` returns no points (the learner has reached its numerical resolution), so it cannot
+  spin forever. `BlockingRunner` requires at least one goal; an `AsyncRunner` without one runs until
+  [`cancel!`](@ref).
+- **Batches.** Each iteration asks for `batch_size` points (default 1, or `Threads.nthreads()` with
+  `parallel=true`), evaluates all of them, then tells all results. Points are requested with
+  `tell_pending=false`, so the learner never holds pending points that a failed or cancelled batch
+  would leave behind. Smaller batches are more adaptive.
+- **Parallel evaluation.** `parallel=true` evaluates the points of a batch in separate tasks
+  (`Threads.@spawn`). Start Julia with several threads (`julia -t auto`), and make sure `f` is safe
+  to call concurrently. The learner itself is never touched concurrently: only the runner loop
+  calls `ask` and `tell!`, after the whole batch has been evaluated.
+- **Asynchronous execution.** The runner loop is an `@async` task pinned to the caller's thread;
+  evaluations run in spawned tasks. So the learner changes only when the caller yields (`sleep`,
+  `wait`, I/O), and reading `runner.learner` from the calling task needs no lock. Do not read it from
+  another thread while the runner is running.
+- **Progress.** [`status`](@ref) is `:running`, `:finished`, `:cancelled` or `:failed`; progress is
+  `npoints(runner.learner)` and `loss(runner.learner)`.
+- **Errors.** If `f` throws, the rest of the batch is still evaluated and its successful results
+  are told; then the runner fails with an [`EvaluationError`](@ref) carrying the failing `point` and
+  the original exception with its backtrace. `wait(runner)` (and `BlockingRunner`) rethrows it.
+- **Cancellation.** [`cancel!`](@ref) stops the runner between batches: the batch in flight finishes
+  and is told first.
+
 ## Refinement algorithm
 
 Each interval between neighbouring evaluated points has a loss, by default the length of the
@@ -136,7 +181,22 @@ These are intentional for now and may be revisited:
 - `tell!` with `x` outside the bounds throws; upstream stores the point and ignores it.
 - `done(learner; tol)` exists; upstream expresses goals through runners (`loss_goal`).
 - Not yet implemented: vector-valued `y`, neighbour-based losses (`nth_neighbors`, curvature),
-  runners, `loss(real=false)`, optimized bulk `tell_many`.
+  `loss(real=false)`, optimized bulk `tell_many`.
+
+Runners:
+
+- One `Runner` type; `BlockingRunner` and `AsyncRunner` are functions that construct and start it.
+  Execution uses Julia tasks and threads instead of `concurrent.futures` executors; there is no
+  `executor`/`ntasks` argument, and distributed execution is not supported yet.
+- Batch-synchronous: a batch is evaluated completely before the next `ask`. Upstream refills an
+  executor slot as soon as one point finishes, which keeps workers busier when evaluation times vary.
+- Goals: only `tol` (`loss_goal`) and `max_npoints` (`npoints_goal`); no custom `goal` callable,
+  `end_time_goal` or `duration_goal`. `max_npoints` caps the batch size, so it is never overshot.
+- Errors: no `retries`; the first failure stops the runner with an `EvaluationError` after telling
+  the batch's successful results. Upstream wraps it in a `RuntimeError`.
+- `cancel!` takes effect between batches; upstream cancels the running futures and discards their
+  points.
+- No logging, saving, `overhead`, `elapsed_time` or live plotting.
 
 `Learner2D` additionally:
 
@@ -168,6 +228,13 @@ result
 npoints
 default_loss
 triangles
+Runner
+BlockingRunner
+AsyncRunner
+EvaluationError
+status
+cancel!
+Base.wait(::Runner)
 ```
 
 ### Internals
