@@ -234,7 +234,9 @@ end
 function combined_data(l::Learner2D, chosen)
     _, pts, vals = finite_data(l)
     extra = [scale(l, p) for p in Iterators.flatten((l.pending, chosen))]
-    if corners_done(l) && length(pts) >= 3
+    if isempty(extra)  # nothing to interpolate: skip a triangulation
+        extra_vals = fill(zero_value(eltype(vals)), 0)
+    elseif corners_done(l) && length(pts) >= 3
         tri = delaunay(pts)
         extra_vals = interpolate_values(tri, vals, extra)
     else
@@ -256,7 +258,7 @@ function choose_points!(chosen, improvements, l::Learner2D, m)
     pts, vals = combined_data(l, chosen)
     ts = delaunay_triangles(pts)
     isempty(ts) && return 0
-    # ponytail: full triangulation rebuild per call, O(N log N); use DT.add_point!/delete_point! if N ~ 1e5
+    # ponytail: full triangulation rebuild per call, 7 ms at N = 1e3 (benchmark/README.md), the cost of every ask; use DT.add_point!/delete_point! if N ~ 1e5
     losses = l.loss_per_triangle(pts, vals, ts)
     added = 0
     for t in sortperm(losses; rev = true)

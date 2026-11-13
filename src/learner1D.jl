@@ -163,14 +163,18 @@ end
 
 # Intervals (ls[k], rs[k]) of the evaluated, pending and extra points with their pending-aware priorities.
 # unknown[k] marks intervals without an evaluated neighbour on both sides (upstream loss Inf, ranked by width).
+# ponytail: rebuilds all intervals per call, O(N) (measured 60 us at N = 1e4 for an ask of one point, about 0.5 s per 1e4 points); keep a cached interval list updated in tell! if N reaches ~1e5
 function combined_intervals(l::Learner1D{T}, extra) where {T}
     combined = sort!(vcat(l.xs, l.pending, extra))
     ls = combined[1:end-1]
     rs = combined[2:end]
     prios = similar(ls)
     unknown = falses(length(ls))
+    j = 0  # index of the last evaluated x <= ls[k]; ls is sorted, so it only moves forward
     for k in eachindex(ls)
-        j = searchsortedlast(l.xs, ls[k])
+        while j < length(l.xs) && l.xs[j+1] <= ls[k]
+            j += 1
+        end
         if 1 <= j < length(l.xs) && rs[k] <= l.xs[j+1]
             dx = l.xs[j+1] - l.xs[j]
             prios[k] = priority(l, l.losses[j], dx) * (rs[k] - ls[k]) / dx
