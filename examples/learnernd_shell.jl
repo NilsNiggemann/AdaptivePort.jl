@@ -1,7 +1,7 @@
 # LearnerND on a thin, sinusoidally distorted spherical shell: the adaptive samples as a 3D scatter coloured by f.
-# Interactive (WGLMakie); can be exported to a standalone HTML page.
+# Left: a thin slab through the middle; right: a cutaway whose cut planes show the nearest-sample (Voronoi) value.
 # Run with: julia --project=examples examples/learnernd_shell.jl
-using AdaptivePort, WGLMakie, Bonito, NearestNeighbors
+using AdaptivePort, CairoMakie, NearestNeighbors
 
 const WIDTH = 0.05
 
@@ -53,11 +53,9 @@ us = range(-1, 0; length = 200)
 planes = ((u, v) -> (0.0, u, -v), (u, v) -> (u, 0.0, -v), (u, v) -> (u, v, 0.0))
 for plane in planes
     xyz = [plane(u, v) for u in us, v in us]
-    surface!(ax2, getindex.(xyz, 1), getindex.(xyz, 2), getindex.(xyz, 3); color = voronoi_cut(xyz), alpha = 0.55, shading = NoShading, colormap = :viridis, colorrange = (0, 1))
+    surface!(ax2, getindex.(xyz, 1), getindex.(xyz, 2), getindex.(xyz, 3); color = voronoi_cut(xyz), shading = NoShading, colormap = :viridis, colorrange = (0, 1))
 end
 Label(fig[2, 2], "cutaway with Voronoi cuts"; color = :gray30, tellwidth = false)
 fig
 
-# The docs figure is a screenshot of the exported page (WGLMakie cannot write PNGs without a browser):
-# Bonito.export_static("learnernd_shell.html", App(() -> fig))
-# then e.g. headless Chromium (playwright, software WebGL) at an 820 x 420 viewport, device scale factor 2.
+# save("learnernd_shell.png", fig; px_per_unit = 2)
