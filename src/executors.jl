@@ -45,6 +45,9 @@ Evaluate through Dagger.jl's scheduler, which spreads work over the threads and 
 Keywords are passed to `Dagger.Options` (e.g. `scope`) and apply to every evaluation. `default_ntasks` is
 `Dagger.num_processors(scope)`, the threads of all processes Dagger knows. Workers added after Dagger's scheduler
 started must be registered with `Dagger.addprocs!(Dagger.Sch.eager_context(), workers())`.
+Define `f` with `@everywhere` as a named function: an anonymous function is sent by value with every evaluation,
+and in the tests this intermittently failed on multi-threaded workers with a `MethodError` on the deserialized
+closure type.
 
 **See Also**
 - [`AsyncRunner`](@ref), [`ThreadedExecutor`](@ref)

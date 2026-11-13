@@ -34,14 +34,21 @@ using Dagger, Distributed
         try
             @everywhere ws using Dagger
             Dagger.addprocs!(Dagger.Sch.eager_context(), ws)
+            # named functions defined everywhere: anonymous ones are sent by value and intermittently failed to
+            # deserialize on the two-thread workers (MethodError on the deserialized closure type)
+            @everywhere begin
+                worker_id(x) = Distributed.myid()
+                square(x) = x^2
+                remote_fail(x) = error("remote")
+            end
             ex = DaggerExecutor(; scope = Dagger.UnionScope([Dagger.ProcessScope(w) for w in ws]))
             @test default_ntasks(ex) >= 2
-            pids = Set(fetch(ex(x -> Distributed.myid(), (Float64(i),))) for i in 1:20)
+            pids = Set(fetch(ex(worker_id, (Float64(i),))) for i in 1:20)
             @test pids == Set(ws)
-            l = Learner1D(x -> x^2; bounds = (-1, 1))
+            l = Learner1D(square; bounds = (-1, 1))
             r = BlockingRunner(l; max_npoints = 20, executor = ex)
             @test status(r) === :finished
-            @test_throws EvaluationError BlockingRunner(Learner1D(x -> error("remote"); bounds = (-1, 1)); max_npoints = 5, executor = ex)
+            @test_throws EvaluationError BlockingRunner(Learner1D(remote_fail; bounds = (-1, 1)); max_npoints = 5, executor = ex)
         finally
             rmprocs(ws)
         end

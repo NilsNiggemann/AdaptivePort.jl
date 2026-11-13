@@ -90,13 +90,10 @@ function bench_parallel()
 end
 
 function bench_balancing()
-    if !isdefined(AdaptivePort, :BalancingLearner)
-        println("BalancingLearner: not present in this checkout, skipped")
-        return
-    end
+    mk(m) = BalancingLearner([Learner1D(x -> sin(k * x); bounds = (-1, 1)) for k in 1:m])
+    BlockingRunner(mk(2); max_npoints = 20)  # compile
     for m in (10, 100)
-        mk() = AdaptivePort.BalancingLearner([Learner1D(x -> sin(k * x); bounds = (-1, 1)) for k in 1:m])
-        report("BalancingLearner, $m children, N = 2000", @elapsed(BlockingRunner(mk(); max_npoints = 2000)), 2000)
+        report("BalancingLearner, $m children, N = 2000", @elapsed(BlockingRunner(mk(m); max_npoints = 2000)), 2000)
     end
 end
 

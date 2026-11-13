@@ -30,7 +30,7 @@ BenchmarkTools and the package (`Pkg.develop`); it is not a dependency of the pa
 | 10 ms `f`, N = 100, sequential | | 1.01 s |
 | same, threaded (`ntasks = 4`) | | 0.25 s, 4.0x |
 | same, Distributed (2 workers) | | 0.55 s, 1.85x |
-| `BalancingLearner` | not present in this checkout, not benchmarked | |
+| `BalancingLearner` of 10 / 100 `Learner1D`, `BlockingRunner`, N = 2000 | | 29 / 41 us/point (measured later, after the balancer was merged) |
 | `save_data` N = 1e6 `.csv` / `.jls` | | 0.99 s / 0.09 s |
 | `load_data!` N = 1e6 `.csv` / `.jls` | | 0.64 s / 0.12 s |
 
