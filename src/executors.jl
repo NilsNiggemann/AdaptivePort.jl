@@ -55,7 +55,11 @@ end
 Evaluate `f` on the ranks of an MPI job with native MPI.jl (package extension; needs `using MPI` and `MPI.Init()`).
 All ranks run the same script: rank 0 runs `body(executor)` (typically a runner), the other ranks serve `f` until rank
 0 leaves `body`. Only points and values are sent; every rank holds `f` itself, and the executor rejects any other
-function. `default_ntasks` is the number of ranks minus one.
+function. `default_ntasks` is the number of ranks minus one, so at least two ranks are needed.
+
+Returns the value of `body` on rank 0 and `nothing` on the other ranks. Leaving `body` (normally or by an exception)
+stops every worker after its current evaluation; results of abandoned evaluations are received and dropped. A crashed
+rank is not detected and makes the run hang.
 
 ```julia
 MPIExecutor(learner.f) do executor      # ranks > 0 serve f here and skip the block
