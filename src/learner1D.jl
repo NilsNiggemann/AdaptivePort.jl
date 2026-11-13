@@ -1,17 +1,21 @@
 """
-    Learner1D{T, F, L}
+    Learner1D{T, V, F, L}
 
-Adaptive sampler of a scalar function on the interval `bounds`, driven by [`ask`](@ref) and [`tell!`](@ref).
+Adaptive sampler of a scalar or vector-valued function on the interval `bounds`, driven by [`ask`](@ref) and [`tell!`](@ref).
+
+The value type `V` is `T` for scalar output (`vdim = 1`) and `NTuple{vdim, T}` for vector output. Vector values are
+scaled by one common y-scale, the largest per-component range, as upstream. Non-finite components are ignored when
+tracking the range.
 
 Fields: `f` (stored for future runners, never called), `bounds`, `loss_per_interval`, `dx_eps` (smallest
 splittable interval width, `2 * max(abs.(bounds)) * eps(T)` as upstream), `xs`/`ys` (evaluated points),
 `losses` (cached loss per interval), `pending` (points handed out by [`ask`](@ref) but not yet told),
-`yrange` (min and max of the finite told `ys`) and `yscale` (y-scale the cached `losses` were computed with).
+`yrange` (min and max of the finite told `ys`, per component for vector output) and `yscale` (y-scale the cached `losses` were computed with).
 
 Invariants:
 - `xs` is strictly increasing, `length(ys) == length(xs)`.
 - `length(losses) == max(0, length(xs) - 1)`, `losses[i] == interval_loss(learner, i)` for the interval `(xs[i], xs[i+1])`, evaluated with the current `yscale`; it is `zero(T)` if the width is below `dx_eps`.
-- `yrange[2] - yrange[1] <= 2 * yscale` once two finite distinct `ys` exist: as upstream, all losses are recomputed only when the y-range more than doubles, so that `tell!` stays O(1) in loss evaluations.
+- `maximum(yrange[2] .- yrange[1]) <= 2 * yscale` once two finite distinct `ys` exist: as upstream, all losses are recomputed only when the y-range more than doubles, so that `tell!` stays O(1) in loss evaluations.
 - `pending` is strictly increasing and disjoint from `xs`.
 - All `xs` and `pending` lie inside `bounds`.
 
@@ -20,16 +24,16 @@ Construct with [`Learner1D(f; bounds)`](@ref Learner1D).
 **See Also**
 - [`ask`](@ref), [`tell!`](@ref), [`loss`](@ref), [`default_loss`](@ref)
 """
-mutable struct Learner1D{T<:AbstractFloat, F, L} <: AbstractLearner
+mutable struct Learner1D{T<:AbstractFloat, V, F, L} <: AbstractLearner
     f::F
     bounds::Tuple{T, T}
     loss_per_interval::L
     dx_eps::T
     xs::Vector{T}
-    ys::Vector{T}
+    ys::Vector{V}
     losses::Vector{T}
     pending::Vector{T}
-    yrange::Tuple{T, T}
+    yrange::Tuple{V, V}
     yscale::T
 end
 
@@ -38,11 +42,13 @@ end
 
 Loss of one interval: the length `hypot(x2 - x1, y2 - y1)` of the segment joining its endpoints, as upstream `default_loss`.
 
+For vector values (a tuple of two `NTuple`s) it is the maximum over the components of `hypot(dx, abs(dy_i))`, as upstream; a `NaN` component makes the loss `NaN`.
+
 The learner passes *scaled* coordinates, `x / (b - a)` and `y / yscale`, so the loss is invariant under rescaling `x` or `y`. Measuring the graph's arc length makes steep regions dominate, while flat regions are still refined through the `x` term. A loss of the form `dx * (1 + abs(dy))` was tried first and rejected: for small `dx` the `dy` term vanishes and the sampling becomes uniform.
 
 **Arguments**
 - `xs`: the two scaled interval endpoints.
-- `ys`: the two scaled function values.
+- `ys`: the two scaled function values; for vector output two `NTuple`s, scaled by the common y-scale.
 
 **Returns**
 - The interval loss, same type as the inputs.
@@ -52,8 +58,13 @@ The learner passes *scaled* coordinates, `x / (b - a)` and `y / yscale`, so the 
 """
 default_loss(xs, ys) = hypot(xs[2] - xs[1], ys[2] - ys[1])
 
+function default_loss(xs, ys::Tuple{NTuple, NTuple})
+    dx = xs[2] - xs[1]
+    return maximum(dy -> hypot(dx, dy), abs.(ys[2] .- ys[1]))
+end
+
 """
-    Learner1D(f; bounds, loss_per_interval = default_loss)
+    Learner1D(f; bounds, loss_per_interval = default_loss, vdim = 1)
 
 Create an empty learner for `f` on the interval `bounds`.
 
@@ -62,7 +73,8 @@ Create an empty learner for `f` on the interval `bounds`.
 
 **Keyword Arguments**
 - `bounds`: `(a, b)` with both finite and `a < b`; required because no sensible default interval exists. Integers are promoted to floating point.
-- `loss_per_interval`: function `(xs, ys) -> loss` of one interval in scaled coordinates (see [`default_loss`](@ref)), as upstream.
+- `loss_per_interval`: function `(xs, ys) -> loss` of one interval in scaled coordinates (see [`default_loss`](@ref)), as upstream. For `vdim > 1` it receives two `NTuple{vdim}` of scaled values instead of two numbers.
+- `vdim`: length of the function's output. `1` (default) stores plain numbers; `M > 1` stores `NTuple{M, T}` and [`tell!`](@ref) accepts any iterable of length `M`.
 
 **Returns**
 - A [`Learner1D`](@ref); throws `ArgumentError` for invalid bounds.
@@ -70,14 +82,20 @@ Create an empty learner for `f` on the interval `bounds`.
 **See Also**
 - [`ask`](@ref), [`tell!`](@ref)
 """
-function Learner1D(f; bounds::Tuple{Real, Real}, loss_per_interval = default_loss)
+function Learner1D(f; bounds::Tuple{Real, Real}, loss_per_interval = default_loss, vdim::Integer = 1)
     T = float(promote_type(typeof(bounds[1]), typeof(bounds[2])))
     a, b = T(bounds[1]), T(bounds[2])
     if !(isfinite(a) && isfinite(b) && a < b)
         throw(ArgumentError("bounds must be finite with a < b, got $bounds"))
     end
     dx_eps = 2 * max(abs(a), abs(b)) * eps(T)
-    return Learner1D(f, (a, b), loss_per_interval, dx_eps, T[], T[], T[], T[], (T(Inf), T(-Inf)), zero(T))
+    vdim >= 1 || throw(ArgumentError("vdim must be at least 1, got $vdim"))
+    if vdim == 1
+        return Learner1D(f, (a, b), loss_per_interval, dx_eps, T[], T[], T[], T[], (T(Inf), T(-Inf)), zero(T))
+    end
+    V = NTuple{vdim, T}
+    yrange = (ntuple(_ -> T(Inf), vdim), ntuple(_ -> T(-Inf), vdim))
+    return Learner1D(f, (a, b), loss_per_interval, dx_eps, T[], V[], T[], T[], yrange, zero(T))
 end
 
 """
@@ -93,7 +111,7 @@ npoints(l::Learner1D) = length(l.xs)
 """
     result(learner)
 
-Evaluated data of `learner` as a named tuple `(x, y)` of sorted copies.
+Evaluated data of `learner` as a named tuple `(x, y)` of sorted copies; `y` holds tuples for vector output.
 
 **See Also**
 - [`npoints`](@ref), [`tell!`](@ref)
@@ -111,7 +129,7 @@ function interval_loss(l::Learner1D, i)
     dx < l.dx_eps && return zero(dx)
     sx = xscale(l)
     sy = iszero(l.yscale) ? one(sx) : l.yscale
-    return l.loss_per_interval((l.xs[i] / sx, l.xs[i+1] / sx), (l.ys[i] / sy, l.ys[i+1] / sy))
+    return l.loss_per_interval((l.xs[i] / sx, l.xs[i+1] / sx), (l.ys[i] ./ sy, l.ys[i+1] ./ sy))
 end
 
 """
@@ -169,13 +187,34 @@ end
 
 Record the evaluation `y = f(x)` and update the cached interval losses.
 
-Throws `ArgumentError` if `x` is outside the bounds (deviation: upstream stores but ignores such points). A repeated `x` is silently ignored and the first value is kept, as upstream.
+For vector output (`vdim > 1`) `y` is any iterable of length `vdim`; other lengths throw `ArgumentError`. Throws `ArgumentError` if `x` is outside the bounds (deviation: upstream stores but ignores such points). A repeated `x` is silently ignored and the first value is kept, as upstream; use `update_value!` internally to overwrite.
 
 **See Also**
 - [`ask`](@ref), [`tell_pending!`](@ref)
 """
-function tell!(l::Learner1D{T}, x::Real, y::Real) where {T}
-    xt, yt = T(x), T(y)
+tell!(l::Learner1D{T,T}, x::Real, y::Real) where {T} = insert_point!(l, T(x), T(y))
+
+function tell!(l::Learner1D{T,V}, x::Real, y) where {T, V<:Tuple}
+    return insert_point!(l, T(x), as_value(V, y))
+end
+
+# Convert any iterable of the right length to the stored tuple type.
+function as_value(::Type{NTuple{M,T}}, y) where {M, T}
+    t = Tuple(y)
+    length(t) == M || throw(ArgumentError("expected $M output components, got $(length(t))"))
+    return NTuple{M,T}(t)
+end
+
+# Widen the y-range by the finite components of y (upstream never shrinks it).
+function widen_range(range, y)
+    lo = ifelse.(isfinite.(y), min.(range[1], y), range[1])
+    hi = ifelse.(isfinite.(y), max.(range[2], y), range[2])
+    return (lo, hi)
+end
+
+spread(range) = maximum(range[2] .- range[1])
+
+function insert_point!(l::Learner1D{T}, xt::T, yt) where {T}
     check_bounds(l, xt)
     i = searchsortedfirst(l.xs, xt)
     i <= length(l.xs) && l.xs[i] == xt && return l
@@ -184,14 +223,19 @@ function tell!(l::Learner1D{T}, x::Real, y::Real) where {T}
     # ponytail: O(N) insert into Vectors, use a sorted container if N reaches ~1e5
     insert!(l.xs, i, xt)
     insert!(l.ys, i, yt)
+    l.yrange = widen_range(l.yrange, yt)
     n = length(l.xs)
-    if isfinite(yt)
-        l.yrange = (min(l.yrange[1], yt), max(l.yrange[2], yt))
-    end
     n == 1 && return l
     insert!(l.losses, min(i, n - 1), zero(T))
-    if l.yrange[2] - l.yrange[1] > 2 * l.yscale
-        l.yscale = l.yrange[2] - l.yrange[1]
+    refresh_losses!(l, i)
+    return l
+end
+
+# Recompute the losses touching point i, or all of them when the y-range more than doubled (upstream).
+function refresh_losses!(l::Learner1D, i)
+    n = length(l.xs)
+    if spread(l.yrange) > 2 * l.yscale
+        l.yscale = spread(l.yrange)
         for k in eachindex(l.losses)
             l.losses[k] = interval_loss(l, k)
         end
@@ -199,6 +243,33 @@ function tell!(l::Learner1D{T}, x::Real, y::Real) where {T}
         i > 1 && (l.losses[i-1] = interval_loss(l, i - 1))
         i < n && (l.losses[i] = interval_loss(l, i))
     end
+    return l
+end
+
+"""
+    update_value!(learner, x, y)
+
+Overwrite the value at the already evaluated point `x` and update the neighbouring losses.
+
+Unexported; used by `AverageLearner1D` to move a mean. Throws `ArgumentError` if `x` is not evaluated. Values are converted as in [`tell!`](@ref). As upstream (whose `AverageLearner1D` only calls `_update_scale`, which widens), the y-range never shrinks, so an overwritten extreme keeps counting; all losses are recomputed only when the range more than doubles.
+
+**See Also**
+- [`tell!`](@ref)
+"""
+update_value!(l::Learner1D{T,T}, x::Real, y::Real) where {T} = overwrite_point!(l, T(x), T(y))
+
+function update_value!(l::Learner1D{T,V}, x::Real, y) where {T, V<:Tuple}
+    return overwrite_point!(l, T(x), as_value(V, y))
+end
+
+function overwrite_point!(l::Learner1D, xt, yt)
+    i = searchsortedfirst(l.xs, xt)
+    if i > length(l.xs) || l.xs[i] != xt
+        throw(ArgumentError("x = $xt has not been evaluated"))
+    end
+    l.ys[i] = yt
+    l.yrange = widen_range(l.yrange, yt)
+    length(l.xs) > 1 && refresh_losses!(l, i)
     return l
 end
 

@@ -126,3 +126,75 @@ end
     @test allunique(xs)
     @test all(-1 .<= xs .<= 1)
 end
+
+@testset "Learner1D vector output" begin
+    f(x) = (tanh(50x), sin(x))
+    learn(g; n=20, kw...) = begin
+        l = Learner1D(g; bounds=(-1, 1), kw...)
+        for _ in 1:n
+            x = only(ask(l, 1))
+            tell!(l, x, g(x))
+        end
+        l
+    end
+
+    # Reference: upstream adaptive, Learner1D(f; bounds=(-1, 1)), 20 points asked one at a time
+    # (`uv run --no-project --with adaptive python`); losses are upstream's `learner.losses`. Tolerance 1e-12.
+    xs_ref = [-1.0, -0.75, -0.5, -0.25, -0.125, -0.0625, -0.03125, -0.015625, -0.0078125, -0.00390625, 0.0,
+              0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.5, 0.75, 1.0]
+    losses_ref = [0.1483630176961082, 0.16077172241776735, 0.17053886161511683, 0.08758918723574916,
+                  0.04409367282039791, 0.04309345662639039, 0.13143287483455354, 0.14081652916970835,
+                  0.08953761348360394, 0.09645292321003168, 0.18599047988245615, 0.14081652916970835,
+                  0.13143287483455354, 0.04309345662639039, 0.04409367282039791, 0.08758918723574916,
+                  0.17053886161511683, 0.16077172241776735, 0.1483630176961082]
+    l = learn(f; vdim=2)
+    @test result(l).x == xs_ref
+    @test result(l).y isa Vector{NTuple{2,Float64}}
+    @test isapprox(l.losses, losses_ref; rtol=1e-12)
+    @test isapprox(loss(l), 0.18599047988245615; rtol=1e-12)
+
+    # refinement concentrates near the steep component's jump at 0
+    xs = result(l).x
+    @test count(x -> abs(x) < 0.1, xs) > count(x -> abs(x) > 0.5, xs)
+
+    # a common factor on all components leaves the point sequence unchanged
+    l2 = learn(x -> 1000 .* f(x); vdim=2)
+    @test result(l2).x == xs
+
+    # vectors, tuples and wrong lengths
+    l = Learner1D(f; bounds=(0, 1), vdim=3)
+    tell!(l, 0.0, [1, 2, 3])
+    tell!(l, 1.0, (4.0, 5.0, 6.0))
+    @test result(l).y == [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
+    @test_throws ArgumentError tell!(l, 0.5, [1.0, 2.0])
+    @test_throws ArgumentError tell!(l, 0.5, (1.0, 2.0, 3.0, 4.0))
+    @test_throws ArgumentError Learner1D(f; bounds=(0, 1), vdim=0)
+    @test npoints(l) == 2
+
+    # default_loss: maximum over components
+    @test AdaptivePort.default_loss((0.0, 0.3), ((0.0, 0.0), (0.4, 0.1))) ≈ 0.5
+end
+
+@testset "Learner1D update_value!" begin
+    l = Learner1D(sin; bounds=(0, 1))
+    @test_throws ArgumentError AdaptivePort.update_value!(l, 0.5, 1.0)
+    tell!(l, 0.0, 0.0)
+    tell!(l, 0.5, 0.5)
+    tell!(l, 1.0, 1.0)
+    old = copy(l.losses)
+    AdaptivePort.update_value!(l, 0.5, 0.0)
+    @test result(l).y == [0.0, 0.0, 1.0]
+    @test l.losses[1] < old[1]
+    @test l.losses[2] > old[2]
+    @test_throws ArgumentError AdaptivePort.update_value!(l, 0.25, 0.0)
+
+    # vector output; the range does not shrink (upstream), a large new value rescales everything
+    l = Learner1D(sin; bounds=(0, 1), vdim=2)
+    tell!(l, 0.0, (0.0, 0.0))
+    tell!(l, 1.0, (1.0, 0.0))
+    AdaptivePort.update_value!(l, 1.0, [0.0, 10.0])
+    @test result(l).y == [(0.0, 0.0), (0.0, 10.0)]
+    @test l.yscale == 10.0
+    @test l.losses[1] ≈ hypot(1.0, 1.0)
+    @test_throws ArgumentError AdaptivePort.update_value!(l, 1.0, [1.0])
+end
