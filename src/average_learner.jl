@@ -77,7 +77,7 @@ has_own_goal(::AverageLearner) = true
 
 function ask_with_improvements(l::AverageLearner, n::Integer; tell_pending = true)
     points = Int[]
-    seed = 0
+    seed = 0  # ponytail: O(npoints) scan from 0 per ask; keep a "first free seed" counter if runs reach ~1e5 samples
     while length(points) < n
         haskey(l.data, seed) || seed in l.pending || push!(points, seed)
         seed += 1
