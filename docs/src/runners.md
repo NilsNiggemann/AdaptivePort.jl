@@ -104,7 +104,8 @@ BlockingRunner(learner; tol = 0.01, executor = DistributedExecutor())
   from the pool and returns it when the call has finished.
 - Only points and values travel. Define `f` and its dependencies with `@everywhere` (or load them in the
   worker startup).
-- Clusters: `addprocs(SlurmManager(n))` (ClusterManagers.jl) or MPIClusterManagers.jl work unchanged.
+- Clusters: workers from any cluster manager work unchanged, e.g. `addprocs(SlurmManager())` from
+  SlurmClusterManager.jl inside a Slurm allocation (see the job script below).
 - An exception in `f` is reported as an `EvaluationError` with the original exception and the worker's backtrace.
   A lost worker also ends the run with an `EvaluationError`; there are no retries.
 

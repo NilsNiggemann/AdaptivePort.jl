@@ -1,5 +1,7 @@
 # Adaptive sampling on MPI ranks. Run with
 #   mpiexec -n 4 julia --project=examples examples/mpi.jl
+# with the mpiexec of the MPI library MPI.jl uses; for its bundled MPICH:
+#   julia --project=examples -e 'using MPI; MPI.mpiexec(m -> run(`$m -n 4 julia --project=examples examples/mpi.jl`))'
 # Rank 0 runs the learner; ranks 1..3 evaluate.
 using MPI, AdaptivePort
 MPI.Init()
