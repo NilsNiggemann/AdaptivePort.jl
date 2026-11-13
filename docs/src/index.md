@@ -29,6 +29,11 @@ data = result(learner)   # (x = sorted Vector, y = values)
 The full script is `examples/learner1d.jl`; run it from the repository root with
 `julia --project=. examples/learner1d.jl`.
 
+Uniform versus adaptive sampling of three sharp functions with the same number of evaluations
+(50), from `examples/learner1d_plot.jl` (run with `julia --project=examples`):
+
+![Learner1D versus a uniform grid](assets/learner1d_vs_uniform.png)
+
 - `ask(learner, n)` returns up to `n` new points. The first points are the bounds; after that each
   point is the midpoint of the interval with the largest loss. The returned points are marked
   *pending*, so further calls never return them again, even before they are evaluated. Pass
@@ -74,6 +79,11 @@ tris = triangles(learner) # counter-clockwise index triples into data.points
 ```
 
 The full script is `examples/learner2d.jl`.
+
+Two thin rings sampled with 484 points on a uniform grid (top) and by `Learner2D` (bottom, Voronoi
+cells of the samples), from `examples/learner2d_rings.jl`:
+
+![Learner2D versus a uniform grid](assets/learner2d_rings.png)
 
 - Points are `NTuple{2}` tuples `(x, y)` everywhere: `ask` returns them, `tell!` takes them.
 - `bounds = ((xmin, xmax), (ymin, ymax))`, finite with `xmin < xmax`, `ymin < ymax`; otherwise

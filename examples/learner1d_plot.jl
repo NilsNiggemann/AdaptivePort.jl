@@ -56,5 +56,5 @@ fig = with_theme(theme_SimpleTicks(; publication = true)) do
     # save("learner1d_vs_uniform.pdf", fig)
     fig
 end
-save(joinpath(@__DIR__, "learner1d_vs_uniform.png"), fig; px_per_unit = 1)
+save(joinpath(@__DIR__, "..", "docs", "src", "assets", "learner1d_vs_uniform.png"), fig; px_per_unit = 1)
 fig

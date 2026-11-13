@@ -6,6 +6,8 @@
 AdaptivePort.jl is an independent Julia implementation of
 [Python Adaptive](https://github.com/python-adaptive/adaptive). It is an early stage, experimental implementation which with heavy use of AI generated code.
 
+## Known issues:
+- As in the python implementation, the adaptive sampler targets the region of a function where the loss is highest, which can lead to undersampling for symmetric functions. See 1d `examples/learner1d_plot.jl`
 
 ## Attribution
 
