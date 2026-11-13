@@ -179,6 +179,14 @@ cells of the samples), from `examples/learner2d_rings.jl` (`budget = 28^2`):
 
 ![Learner2D versus a uniform grid](assets/learner2d_rings.png)
 
+![Learner2D on the spin-ice structure factor in the (h, h, l) plane](assets/learner2d_spinice.png)
+
+2000 samples of the neutron structure factor ``S(\mathbf{q})`` of nearest-neighbour classical spin ice in the
+self-consistent Gaussian approximation (``T = 0.001`` in units of the effective Ising coupling), in the plane
+``q_x = q_y`` of reciprocal space (Voronoi cells of the samples, samples in white). The samples concentrate on
+the pinch points (bow-ties) at the reciprocal-lattice points.
+`examples/learner2d_spinice.jl` produces the figure.
+
 - Points are `NTuple{2}` tuples `(x, y)` everywhere: `ask` returns them, `tell!` takes them.
 - `bounds = ((xmin, xmax), (ymin, ymax))`, finite with `xmin < xmax`, `ymin < ymax`; otherwise
   `ArgumentError`. Any aspect ratio and coordinate scale works: the learner works in scaled
