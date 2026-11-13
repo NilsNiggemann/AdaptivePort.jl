@@ -159,6 +159,51 @@ open!(g::Gate, n = 1) = foreach(_ -> put!(g.release, nothing), 1:n)
         @test status(r) === :finished
     end
 
+    @testset "checkpoints" begin
+        dir = mktempdir()
+        # written on every kind of stop: goal, deadline, cancel, failure
+        path = joinpath(dir, "goal.csv")
+        l = Learner1D(sin; bounds = (0, 1))
+        BlockingRunner(l; max_npoints = 15, checkpoint = path)
+        fresh = load_data!(Learner1D(sin; bounds = (0, 1)), path)
+        @test result(fresh) == result(l)
+        BlockingRunner(fresh; max_npoints = 25)  # a reloaded learner keeps sampling
+        @test npoints(fresh) == 25
+
+        g = Gate()
+        path = joinpath(dir, "deadline.jls")
+        BlockingRunner(Learner1D(g; bounds = (0, 1)); duration = 0.1, ntasks = 2, checkpoint = path)
+        @test isfile(path)
+        open!(g, 2)
+
+        g = Gate()
+        path = joinpath(dir, "cancel.csv")
+        r = AsyncRunner(Learner1D(g; bounds = (0, 1)); ntasks = 2, checkpoint = path)
+        @test timedwait(() -> g.started[] == 2, 30.0) === :ok
+        open!(g)
+        @test timedwait(() -> npoints(r.learner) == 1, 30.0) === :ok
+        cancel!(r)
+        wait(r)
+        @test npoints(load_data!(Learner1D(identity; bounds = (0, 1)), path)) == 1
+        open!(g, 10)
+
+        path = joinpath(dir, "failure.csv")
+        l = Learner1D(x -> x == 1 ? error("boom") : x; bounds = (0, 1))
+        @test_throws EvaluationError BlockingRunner(l; max_npoints = 10, checkpoint = path)
+        @test result(load_data!(Learner1D(identity; bounds = (0, 1)), path)).x == [0.0]
+
+        # periodic: appears during a run
+        g = Gate()
+        path = joinpath(dir, "periodic.csv")
+        r = AsyncRunner(Learner1D(g; bounds = (0, 1)); checkpoint = path, checkpoint_interval = 0.05)
+        @test timedwait(() -> isfile(path), 30.0) === :ok
+        @test status(r) === :running
+        cancel!(r)
+        wait(r)
+        open!(g)
+        @test filter(f -> f != "periodic.csv" && startswith(f, "periodic"), readdir(dir)) == []
+    end
+
     @testset "custom plain-function executor" begin
         used = Threads.Atomic{Int}(0)
         executor = (f, x) -> (Threads.atomic_add!(used, 1); Threads.@spawn f(x...))

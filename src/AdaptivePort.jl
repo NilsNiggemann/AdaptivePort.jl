@@ -143,32 +143,6 @@ function load_table!(l::AbstractLearner, table)
 end
 
 """
-    save_data(path, learner)
-
-Write the evaluated data of `learner` to `path`; never the function, pending points or internal state (upstream `save`).
-
-The format follows the extension: `.csv` writes [`to_table`](@ref) as plain CSV (numbers only, lossless, readable by
-pandas and NumPy); anything else (use `.jls`) uses the `Serialization` stdlib, which also keeps non-numeric data such
-as the full results of a [`DataSaver`](@ref) but is tied to the Julia version.
-
-**See Also**
-- [`load_data!`](@ref), [`to_table`](@ref)
-"""
-function save_data end
-
-"""
-    load_data!(learner, path)
-
-Tell a freshly constructed `learner` the data saved by [`save_data`](@ref) at `path` (upstream `load`); the caller
-supplies the function again. Throws if the file is missing or its columns do not fit the learner, so resuming is
-written `isfile(path) && load_data!(learner, path)`.
-
-**Returns**
-- `learner`.
-"""
-function load_data! end
-
-"""
     default_ntasks(executor)
 
 Number of evaluations a runner keeps in flight with `executor` when `ntasks` is not given: `1` unless the executor
