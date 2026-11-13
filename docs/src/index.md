@@ -80,8 +80,8 @@ tris = triangles(learner) # counter-clockwise index triples into data.points
 
 The full script is `examples/learner2d.jl`.
 
-Two thin rings sampled with 484 points on a uniform grid (top) and by `Learner2D` (bottom, Voronoi
-cells of the samples), from `examples/learner2d_rings.jl`:
+Two thin rings sampled with 784 points on a uniform grid (top) and by `Learner2D` (bottom, Voronoi
+cells of the samples), from `examples/learner2d_rings.jl` (`budget = 28^2`):
 
 ![Learner2D versus a uniform grid](assets/learner2d_rings.png)
 

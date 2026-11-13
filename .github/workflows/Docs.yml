@@ -19,6 +19,9 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Build and deploy
         run: |
+          julia --project=examples -e 'using Pkg; Pkg.instantiate()'
+          julia --project=examples examples/learner1d_plot.jl
+          julia --project=examples examples/learner2d_rings.jl
           julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
           julia --project=docs docs/make.jl
         env:
