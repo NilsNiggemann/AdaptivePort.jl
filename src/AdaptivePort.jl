@@ -13,6 +13,7 @@ import Dates
 import DelaunayTriangulation as DT
 import LinearAlgebra
 import Random
+import Serialization
 import StatsFuns
 
 export AbstractLearner, ask, tell!, tell_pending!, loss, done, result, npoints, pending_points, remove_unfinished!
@@ -186,6 +187,7 @@ include("average_learner1D.jl")
 include("integrator_coeffs.jl")
 include("integrator_learner.jl")
 include("sequence_learner.jl")
+include("io.jl")
 include("runner.jl")
 
 end
