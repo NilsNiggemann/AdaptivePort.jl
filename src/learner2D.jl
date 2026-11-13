@@ -1,9 +1,9 @@
 """
-    Learner2D{T, F, L}
+    Learner2D{T, V, F, L}
 
-Adaptive sampler of a scalar function on the rectangle `bounds = ((xmin, xmax), (ymin, ymax))`, driven by [`ask`](@ref) and [`tell!`](@ref).
+Adaptive sampler of a scalar or vector-valued function on the rectangle `bounds = ((xmin, xmax), (ymin, ymax))`, driven by [`ask`](@ref) and [`tell!`](@ref).
 
-Fields: `f` (stored for future runners, never called), `bounds`, `loss_per_triangle`, `points`/`values` (evaluations in tell order), `index` (point → position in `points`) and `pending` (points handed out by [`ask`](@ref) but not yet told).
+Value type `V` is `T` for scalar output and `NTuple{M, T}` for vector output with `M = vdim > 1`. Fields: `f` (stored for future runners, never called), `bounds`, `loss_per_triangle`, `points`/`values` (evaluations in tell order), `index` (point → position in `points`) and `pending` (points handed out by [`ask`](@ref) but not yet told).
 
 Invariants:
 - `length(values) == length(points)`, `index[points[i]] == i`, `points` are distinct.
@@ -17,27 +17,28 @@ Construct with [`Learner2D(f; bounds)`](@ref Learner2D(::Any)).
 **See Also**
 - [`ask`](@ref), [`tell!`](@ref), [`loss`](@ref), [`triangles`](@ref), [`default_loss`](@ref)
 """
-struct Learner2D{T<:AbstractFloat, F, L} <: AbstractLearner
+struct Learner2D{T<:AbstractFloat, V, F, L} <: AbstractLearner
     f::F
     bounds::NTuple{2, NTuple{2, T}}
     loss_per_triangle::L
     points::Vector{NTuple{2, T}}
-    values::Vector{T}
+    values::Vector{V}
     index::Dict{NTuple{2, T}, Int}
     pending::Vector{NTuple{2, T}}
 end
 
 """
-    Learner2D(f; bounds, loss_per_triangle = default_loss)
+    Learner2D(f; bounds, loss_per_triangle = default_loss, vdim = 1)
 
-Create an empty learner for `f(x, y)` on the rectangle `bounds`.
+Create an empty learner for `f(x, y)` on the rectangle `bounds`. With `vdim = M > 1`, `f` returns `M` numbers and values are stored as `NTuple{M, T}`.
 
 **Arguments**
 - `f`: the function to learn; stored but never called by the learner.
 
 **Keyword Arguments**
 - `bounds`: `((xmin, xmax), (ymin, ymax))`, all finite with `xmin < xmax` and `ymin < ymax`; required because no sensible default domain exists. Integers are promoted to floating point.
-- `loss_per_triangle`: function `(points, values, triangles) -> Vector` of per-triangle losses (see [`default_loss`](@ref)). `points` are in scaled coordinates, `values` are raw, `triangles` are counter-clockwise index triples. Upstream passes a scipy interpolator holding the same three things.
+- `loss_per_triangle`: function `(points, values, triangles) -> Vector` of per-triangle losses (see [`default_loss`](@ref)). `points` are in scaled coordinates, `values` are raw and of the stored type (`Vector{T}`, or `Vector{NTuple{M, T}}` for vector output), `triangles` are counter-clockwise index triples. Upstream passes a scipy interpolator holding the same three things.
+- `vdim`: number of output components, default 1 (scalar values).
 
 **Returns**
 - A [`Learner2D`](@ref); throws `ArgumentError` for invalid bounds.
@@ -45,7 +46,8 @@ Create an empty learner for `f(x, y)` on the rectangle `bounds`.
 **See Also**
 - [`ask`](@ref), [`tell!`](@ref)
 """
-function Learner2D(f; bounds::NTuple{2, Tuple{Real, Real}}, loss_per_triangle = default_loss)
+function Learner2D(f; bounds::NTuple{2, Tuple{Real, Real}}, loss_per_triangle = default_loss, vdim::Integer = 1)
+    vdim >= 1 || throw(ArgumentError("vdim must be at least 1, got $vdim"))
     (xa, xb), (ya, yb) = bounds
     T = float(promote_type(typeof(xa), typeof(xb), typeof(ya), typeof(yb)))
     b = ((T(xa), T(xb)), (T(ya), T(yb)))
@@ -53,7 +55,8 @@ function Learner2D(f; bounds::NTuple{2, Tuple{Real, Real}}, loss_per_triangle = 
         throw(ArgumentError("bounds must be finite ((xmin, xmax), (ymin, ymax)) with xmin < xmax and ymin < ymax, got $bounds"))
     end
     P = NTuple{2, T}
-    return Learner2D(f, b, loss_per_triangle, P[], T[], Dict{P, Int}(), P[])
+    V = vdim == 1 ? T : NTuple{vdim, T}
+    return Learner2D(f, b, loss_per_triangle, P[], V[], Dict{P, Int}(), P[])
 end
 
 npoints(l::Learner2D) = length(l.points)
@@ -95,9 +98,22 @@ function to_point(l::Learner2D{T}, p) where {T}
     return q
 end
 
+isfinite_value(z::Real) = isfinite(z)
+isfinite_value(z::Tuple) = all(isfinite, z)
+
+zero_value(::Type{T}) where {T<:Real} = zero(T)
+zero_value(::Type{NTuple{M, T}}) where {M, T} = ntuple(_ -> zero(T), M)
+
+# Convert a told value to the stored type: `T` for scalar learners, `NTuple{M, T}` (any iterable of length `M`) for vector ones.
+to_value(::Learner2D{T, T}, z::Real) where {T} = T(z)
+function to_value(::Learner2D{T, NTuple{M, T}}, z) where {T, M}
+    length(z) == M || throw(ArgumentError("expected a value with $M components, got $(length(z))"))
+    return NTuple{M, T}(collect(z))
+end
+
 # Scaled points and values of the evaluated points with finite values: the vertices of the real triangulation.
 function finite_data(l::Learner2D)
-    idx = findall(isfinite, l.values)
+    idx = findall(isfinite_value, l.values)
     return idx, [scale(l, p) for p in view(l.points, idx)], l.values[idx]
 end
 
@@ -134,19 +150,20 @@ end
 """
     tell!(learner::Learner2D, (x, y), z)
 
-Record the evaluation `z = f(x, y)`.
+Record the evaluation `z = f(x, y)`; for vector output (`vdim = M > 1`) `z` is any iterable of length `M`, otherwise `ArgumentError`.
 
-Throws `ArgumentError` if `(x, y)` is outside the bounds (deviation: upstream stores but ignores such points). Telling an evaluated point again overwrites its value, as upstream. Non-finite `z` is stored but left out of the triangulation.
+Throws `ArgumentError` if `(x, y)` is outside the bounds (deviation: upstream stores but ignores such points). Telling an evaluated point again overwrites its value, as upstream. Non-finite `z` (any non-finite component) is stored but left out of the triangulation.
 """
-function tell!(l::Learner2D{T}, p::Tuple{Real, Real}, z::Real) where {T}
+function tell!(l::Learner2D, p::Tuple{Real, Real}, z)
     q = to_point(l, p)
+    v = to_value(l, z)
     i = get(l.index, q, 0)
     if i == 0
         push!(l.points, q)
-        push!(l.values, T(z))
+        push!(l.values, v)
         l.index[q] = length(l.points)
     else
-        l.values[i] = T(z)
+        l.values[i] = v
     end
     j = findfirst(==(q), l.pending)
     j === nothing || deleteat!(l.pending, j)
@@ -193,12 +210,19 @@ function combined_data(l::Learner2D, chosen)
     extra = [scale(l, p) for p in Iterators.flatten((l.pending, chosen))]
     if corners_done(l) && length(pts) >= 3
         tri = delaunay(pts)
-        extra_vals = [interpolate_linear(tri, vals, p) for p in extra]
+        extra_vals = interpolate_values(tri, vals, extra)
     else
-        extra_vals = zeros(eltype(vals), length(extra))
+        extra_vals = fill(zero_value(eltype(vals)), length(extra))
     end
-    keep = isfinite.(extra_vals)  # outside the hull of the finite data (a corner with a NaN value)
+    keep = isfinite_value.(extra_vals)  # outside the hull of the finite data (a corner with a NaN value)
     return vcat(pts, extra[keep]), vcat(vals, extra_vals[keep])
+end
+
+# Linear interpolation of `vals` (scalars or tuples, interpolated per component) at the points `qs`.
+interpolate_values(tri, vals::Vector{<:Real}, qs) = [interpolate_linear(tri, vals, q) for q in qs]
+function interpolate_values(tri, vals::Vector{<:Tuple}, qs)
+    comps = ntuple(c -> map(v -> v[c], vals), length(first(vals)))
+    return [map(vc -> interpolate_linear(tri, vc, q), comps) for q in qs]
 end
 
 # Append up to `m` new points to `chosen`, one per triangle in order of decreasing loss. Returns the number added.
@@ -249,7 +273,7 @@ The `dev` term refines where the function curves; the area term keeps refining f
 
 **Arguments**
 - `points`: scaled vertex coordinates, `NTuple{2}` each.
-- `values`: function values at `points`.
+- `values`: function values at `points`, `Vector{T}` or, for vector output, `Vector{NTuple{M, T}}` (losses are then summed over components, with values normalised by the largest component range, as upstream).
 - `triangles`: counter-clockwise index triples into `points`.
 
 **Returns**
@@ -269,11 +293,21 @@ end
 """
     deviations(points, values, triangles)
 
-Per-triangle estimate of the linear interpolation error, as upstream `deviations`: with values normalised by their range and gradients `g` from [`estimate_gradients`](@ref AdaptivePort.estimate_gradients), `dev = sum_i max_j abs(v_i + g_i ⋅ (p_j - p_i) - v_j)` over the vertices `i`, `j` of the triangle.
+Per-triangle estimate of the linear interpolation error, as upstream `deviations`: with values normalised by their range and gradients `g` from [`estimate_gradients`](@ref AdaptivePort.estimate_gradients), `dev = sum_i max_j abs(v_i + g_i ⋅ (p_j - p_i) - v_j)` over the vertices `i`, `j` of the triangle. For vector values (`Vector{NTuple{M, T}}`) all components are normalised by the largest component range, gradients are estimated per component and the deviations are summed over components.
 """
-function deviations(points, values, triangles)
+function deviations(points, values::AbstractVector{<:Real}, triangles)
     lo, hi = extrema(values)
-    v = values ./ (hi > lo ? hi - lo : one(hi))
+    return component_deviations(points, values ./ (hi > lo ? hi - lo : one(hi)), triangles)
+end
+
+function deviations(points, values::AbstractVector{<:Tuple}, triangles)
+    comps = ntuple(c -> map(v -> v[c], values), length(first(values)))
+    range = maximum(c -> (e = extrema(c); e[2] - e[1]), comps)
+    return sum(c -> component_deviations(points, c ./ (range > 0 ? range : one(range)), triangles), comps)
+end
+
+# `v` is already normalised.
+function component_deviations(points, v, triangles)
     g = estimate_gradients(points, v, triangles)
     return map(triangles) do t
         sum(t) do i

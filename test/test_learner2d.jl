@@ -171,3 +171,61 @@ end
     @test length(default_loss(p, v, ts)) == length(ts)
     @test all(>(0), default_loss(p, v, ts))
 end
+
+@testset "Learner2D vector output" begin
+    # localised ring in one component, smooth plane in the other: sampling concentrates on the ring
+    f(x, y) = (exp(-50 * (x^2 + y^2 - 0.3)^2), (x + y) / 10)
+    l = Learner2D(f; bounds=((-1, 1), (-1, 1)), vdim=2)
+    run_budget2!(l, f, 300, 5)
+    @test npoints(l) == 300
+    @test eltype(result(l).values) == NTuple{2,Float64}
+    @test isfinite(loss(l))
+    on_ring = count(p -> abs(p[1]^2 + p[2]^2 - 0.3) < 0.1, result(l).points) / 300
+    @test on_ring > 0.3  # the annulus holds 16% of the area (measured 0.34)
+
+    # tell! accepts any iterable of length vdim and rejects other lengths
+    l = Learner2D(f; bounds=((0, 1), (0, 1)), vdim=3)
+    tell!(l, (0.5, 0.5), [1, 2, 3])
+    tell!(l, (0.25, 0.5), (1, 2, 3.5))
+    @test result(l).values == [(1.0, 2.0, 3.0), (1.0, 2.0, 3.5)]
+    @test_throws ArgumentError tell!(l, (0.1, 0.1), (1.0, 2.0))
+    @test_throws ArgumentError tell!(l, (0.1, 0.1), 1.0)
+    @test_throws ArgumentError Learner2D(f; bounds=((0, 1), (0, 1)), vdim=0)
+    @test npoints(l) == 2
+
+    # a value with any non-finite component is left out of the triangulation
+    l = Learner2D(f; bounds=((0, 1), (0, 1)), vdim=2)
+    for (p, z) in zip(ask(l, 4), ((0, 0), (0, 1), (1, 0), (1, 1)))
+        tell!(l, p, z)
+    end
+    tell!(l, (0.5, 0.5), (1.0, NaN))
+    @test npoints(l) == 5
+    @test length(triangles(l)) == 2
+    @test all(t -> 5 ∉ t, triangles(l))
+    g(x, y) = (x + y, x > 0.5 ? NaN : x * y)
+    l = run_budget2!(Learner2D(g; bounds=((0, 1), (0, 1)), vdim=2), g, 100, 5)
+    @test npoints(l) > 4
+    @test !isnan(loss(l))
+end
+
+@testset "Learner2D vector loss matches scipy/upstream" begin
+    # Produced with upstream's default_loss(LinearNDInterpolator(p, v)) (adaptive + scipy, uv run); losses are keyed by
+    # the sorted 1-based vertex triple. Gradients: CloughTocher2DInterpolator(tri, v / ptp(v, axis=0).max(), tol=1e-6).grad
+    # for the second component.
+    p = [(-0.5, -0.5), (-0.5, 0.5), (0.5, -0.5), (0.5, 0.5), (0.1, 0.2), (-0.2, -0.1), (0.3, -0.3), (-0.25, 0.35)]
+    v = [(sin(3x) * cos(2y) + y^2, 5exp(-50 * (x^2 + y^2 - 0.1)^2), x * y) for (x, y) in p]
+    ref = Dict((1, 2, 6) => 1.8307819515911237, (1, 3, 7) => 1.8489064898499101, (1, 6, 7) => 1.319572105994419, (5, 6, 7) => 0.713339252482134, (3, 4, 7) => 1.777344171832272,
+               (4, 5, 7) => 1.131790485454905, (2, 6, 8) => 0.5467508977571149, (5, 6, 8) => 0.4617089607595119, (2, 4, 8) => 1.5838310679482115, (4, 5, 8) => 0.8283910187751977)
+    grad2 = [(1.6376284958963165, 1.4190960600755023), (2.3050074818790436, -1.4238665362027818), (-2.1502120154461637, 2.068167990424798), (-1.6487191451588468, -1.4735402966701918),
+             (-0.6121530315023754, -0.8471663497610038), (1.1041391731588124, 0.28777539893560494), (-1.254701781583775, 1.1437429101300747), (1.01614858834246, -1.4441140810004498)]
+    ts = AdaptivePort.delaunay_triangles(p)
+    @test Set(Tuple.(sort.(collect.(ts)))) == Set(keys(ref))
+    losses = default_loss(p, v, ts)
+    @test all(i -> isapprox(losses[i], ref[Tuple(sort(collect(ts[i])))]; rtol=1e-12), eachindex(ts))
+    comp(c) = [z[c] for z in v]
+    range_max = maximum(c -> maximum(comp(c)) - minimum(comp(c)), 1:3)
+    g = AdaptivePort.estimate_gradients(p, comp(2) ./ range_max, ts)
+    @test all(i -> all(isapprox.(g[i], grad2[i]; atol=1e-14)), eachindex(p))
+    # the vector deviation is the sum of the component deviations at a common normalisation
+    @test AdaptivePort.deviations(p, v, ts) ≈ sum(c -> AdaptivePort.component_deviations(p, comp(c) ./ range_max, ts), 1:3)
+end
