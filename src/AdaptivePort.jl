@@ -22,6 +22,7 @@ export LearnerND, default_loss_nd, uniform_loss_nd, std_loss_nd, simplices
 export AverageLearner, AverageLearner1D, nsamples, IntegratorLearner, DivergentIntegralError, SequenceLearner
 export Runner, AsyncRunner, BlockingRunner, EvaluationError, status, cancel!
 export ThreadedExecutor, DistributedExecutor, DaggerExecutor, MPIExecutor, default_ntasks
+export BalancingLearner
 export to_table, save_data, load_data!
 
 """
@@ -161,6 +162,7 @@ include("average_learner1D.jl")
 include("integrator_coeffs.jl")
 include("integrator_learner.jl")
 include("sequence_learner.jl")
+include("balancing_learner.jl")
 include("io.jl")
 include("runner.jl")
 
