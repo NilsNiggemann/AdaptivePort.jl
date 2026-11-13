@@ -335,10 +335,14 @@ tell_pending!(l::IntegratorLearner, x) = l
 """
     remove_unfinished!(learner::IntegratorLearner)
 
-Does nothing, as upstream (its `remove_unfinished` is `pass`): points that were asked and never told stay pending and are
-not asked again. Returns `learner`.
+Put the points that were asked and never told back at the front of the queue, so the next `ask` returns them again and
+[`pending_points`](@ref) is empty. Deviation: upstream's `remove_unfinished` is `pass`, so abandoned points are never
+asked again and their intervals never complete. Returns `learner`.
 """
-remove_unfinished!(l::IntegratorLearner) = l
+function remove_unfinished!(l::IntegratorLearner)
+    prepend!(l.stack, pending_points(l))
+    return l
+end
 
 """
     pending_points(learner::IntegratorLearner)

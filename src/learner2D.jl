@@ -141,6 +141,13 @@ function loss(l::Learner2D{T}) where {T}
     return T(maximum(l.loss_per_triangle(pts, vals, ts)))
 end
 
+pending_points(l::Learner2D) = copy(l.pending)
+
+function remove_unfinished!(l::Learner2D)
+    empty!(l.pending)
+    return l
+end
+
 function tell_pending!(l::Learner2D, p::Tuple{Real, Real})
     q = to_point(l, p)
     isknown(l, q) || push!(l.pending, q)

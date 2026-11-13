@@ -19,6 +19,8 @@ export Learner1D, Learner2D, default_loss, triangles
 export LearnerND, default_loss_nd, uniform_loss_nd, std_loss_nd, simplices
 export AverageLearner, AverageLearner1D, nsamples, IntegratorLearner, DivergentIntegralError, SequenceLearner
 export Runner, AsyncRunner, BlockingRunner, EvaluationError, status, cancel!
+export ThreadedExecutor, DistributedExecutor, DaggerExecutor, MPIExecutor, default_ntasks
+export to_table, save_data, load_data!
 
 """
     AbstractLearner
@@ -34,17 +36,20 @@ Adaptive sampler of a function the caller evaluates: the learner proposes points
 - `result(learner)`: copies of the evaluated data as a named tuple.
 - field `f`: the function, called by runners as `f(x...)` on a point `x` from `ask`.
 
-**Interface (Stage 5; implemented by `LearnerND`, `AverageLearner`, `AverageLearner1D`, `IntegratorLearner`, `SequenceLearner`)**
 - `pending_points(learner)`: `Vector` of the points issued but not yet told.
-- `remove_unfinished!(learner)`: forget all pending points; returns `learner`.
+- `remove_unfinished!(learner)`: forget all pending points; returns `learner`. Runners call it whenever they stop.
 - `loss(learner; real = true)`: `real = false` also counts the pending points as if they were evaluated.
 - `AdaptivePort.ask_with_improvements(learner, n; tell_pending = true)`: `(points, loss_improvements)`, upstream's
   return value of `ask`. Defining it gives `ask` for free.
+- `to_table(learner)`: the evaluated data as a column table (named tuple of equal-length vectors), one row per `tell!`.
+- `AdaptivePort.table_rows(learner, table)`: the `(point, value)` pairs that replay `table` through `tell!`.
 
 **Interface (optional)**
 - `done(learner; tol)`: defaults to `loss(learner) <= tol`.
 - `AdaptivePort.has_own_goal(learner)`: `true` if `done(learner)` without `tol` is meaningful (the learner knows when it
   is finished); default `false`. Runners then stop on `done(learner)` when no `tol` is given.
+- `AdaptivePort.load_table!(learner, table)`: tell every row of `table` (a [`to_table`](@ref) result); the default
+  replays `table_rows`. Override when replaying in order is not enough (`IntegratorLearner`).
 """
 abstract type AbstractLearner end
 
@@ -100,6 +105,76 @@ function ask_with_improvements end
 
 ask(l::AbstractLearner, n::Integer; tell_pending = true) = first(ask_with_improvements(l, n; tell_pending))
 
+"""
+    to_table(learner)
+
+The evaluated data of `learner` as a column table: a named tuple of equal-length `Vector`s, one row per told
+evaluation (upstream `to_dataframe`). It is a Tables.jl column table, so `DataFrame(to_table(learner))` and
+`CSV.write(path, to_table(learner))` work without this package depending on either. Never mutates `learner`.
+
+Vector-valued output gives one numbered column per component.
+
+**See Also**
+- [`save_data`](@ref), [`load_data!`](@ref)
+"""
+function to_table end
+
+"""
+    table_rows(learner, table)
+
+Iterator of `(point, value)` pairs such that `tell!(learner, point, value)` for each pair restores the data of
+`table` (a [`to_table`](@ref) result of a learner of the same kind). Unexported; part of the learner interface.
+"""
+function table_rows end
+
+"""
+    load_table!(learner, table)
+
+Tell `learner` every row of `table`, a [`to_table`](@ref) result of a learner of the same kind. The default replays
+[`table_rows`](@ref AdaptivePort.table_rows) through `tell!`. Unexported. Returns `learner`.
+"""
+function load_table!(l::AbstractLearner, table)
+    for (x, y) in table_rows(l, table)
+        tell!(l, x, y)
+    end
+    return l
+end
+
+"""
+    save_data(path, learner)
+
+Write the evaluated data of `learner` to `path`; never the function, pending points or internal state (upstream `save`).
+
+The format follows the extension: `.csv` writes [`to_table`](@ref) as plain CSV (numbers only, lossless, readable by
+pandas and NumPy); anything else (use `.jls`) uses the `Serialization` stdlib, which also keeps non-numeric data such
+as the full results of a [`DataSaver`](@ref) but is tied to the Julia version.
+
+**See Also**
+- [`load_data!`](@ref), [`to_table`](@ref)
+"""
+function save_data end
+
+"""
+    load_data!(learner, path)
+
+Tell a freshly constructed `learner` the data saved by [`save_data`](@ref) at `path` (upstream `load`); the caller
+supplies the function again. Throws if the file is missing or its columns do not fit the learner, so resuming is
+written `isfile(path) && load_data!(learner, path)`.
+
+**Returns**
+- `learner`.
+"""
+function load_data! end
+
+"""
+    default_ntasks(executor)
+
+Number of evaluations a runner keeps in flight with `executor` when `ntasks` is not given: `1` unless the executor
+knows its worker count (upstream uses the executor's core count).
+"""
+default_ntasks(executor) = 1
+
+include("executors.jl")
 include("learner1D.jl")
 include("triangulation.jl")
 include("learner2D.jl")

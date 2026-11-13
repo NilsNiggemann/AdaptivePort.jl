@@ -182,6 +182,13 @@ function tell_pending!(l::Learner1D{T}, x::Real) where {T}
     return l
 end
 
+pending_points(l::Learner1D) = copy(l.pending)
+
+function remove_unfinished!(l::Learner1D)
+    empty!(l.pending)
+    return l
+end
+
 """
     tell!(learner, x, y)
 
