@@ -39,7 +39,7 @@ You can also drive a learner yourself with `ask(learner, n)` and `tell!(learner,
 
 ## Examples
 
-Adaptive sampling of a two-dimensional spin-ice function:
+Adaptive sampling of a two-dimensional cut of spin-ice structure factor:
 
 ![Learner2D spin-ice example](docs/src/assets/learner2d_spinice.png)
 
