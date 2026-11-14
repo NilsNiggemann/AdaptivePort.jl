@@ -133,7 +133,7 @@ The job script starts the 128 ranks with `srun`:
 # precompile once here, not in 128 ranks at the same time
 julia --project=examples -e 'using Pkg; Pkg.precompile()'
 
-srun julia --project=examples examples/phase_diagram/run_mpi.jl
+srun --kill-on-bad-exit=1 julia --project=examples examples/phase_diagram/run_mpi.jl  # a crashed rank ends the job
 ```
 
 On a cluster, MPI.jl must use the cluster's MPI library; see [Clusters](../runners/clusters.md#MPI-ranks). The job
@@ -149,8 +149,25 @@ MPI.mpiexec(m -> run(`$m -n 5 julia --project=examples examples/phase_diagram/ru
 
 ## Which version should I use?
 
-Use Distributed.jl unless your cluster or your `f` already relies on MPI; the
-[comparison](../runners/parallel.md#Distributed.jl-versus-MPI) lists the differences.
+Both versions give the same result at the same speed: every evaluation sends only a point $(g, T)$ and two numbers
+back, so the transport never matters next to a minute-long simulation. They differ in setup and in what happens
+when a worker dies.
+
+- **Distributed.jl: the default.** A plain Julia script that also works from the REPL, no MPI library to
+  configure, and a worker that dies stops the run with an [`EvaluationError`](@ref) (resume from the checkpoint).
+  Each worker holds a TCP connection to the driver, which is fine for hundreds of workers.
+- **MPI: when the job is an MPI job anyway**, e.g. your site wants every parallel program started by `srun`,
+  firewalls or node policies make Distributed's connections awkward, or you run thousands of ranks. It needs
+  MPI.jl set up for the cluster's MPI library. A rank that exits or throws outside `f` fails its point, but a rank
+  killed by a signal (out of memory, segfault) is not visible to rank 0: start the job with
+  `srun --kill-on-bad-exit=1` so Slurm ends it, and pass `timeout` (seconds, well above the slowest evaluation)
+  to [`MPIExecutor`](@ref) for ranks stuck inside `f`.
+- **Dagger: not for this example.** [`DaggerExecutor`](@ref) runs on top of the same Distributed workers and adds
+  a scheduler built for graphs of dependent tasks. Adaptive sampling has no such graph: the learner is the
+  scheduler, and its evaluations are independent. Use Dagger only when `f` itself is a Dagger computation, or
+  your code already runs everything through Dagger.
+
+The [comparison](../runners/parallel.md#Distributed.jl,-MPI-or-Dagger) lists the differences in one table.
 
 ## Checkpoints, time limits and resuming
 

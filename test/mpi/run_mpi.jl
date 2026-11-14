@@ -1,4 +1,5 @@
-# Run under mpiexec by test_mpi.jl. ARGS[1] is "ok", "throw" or "single"; rank 0 prints what the test checks.
+# Run under mpiexec by test_mpi.jl. ARGS[1] is "ok", "throw", "abandon", "exit", "slow" or "single"; rank 0 prints
+# what the test checks.
 using MPI, AdaptivePort
 MPI.Init()
 rank = MPI.Comm_rank(MPI.COMM_WORLD)
@@ -16,6 +17,28 @@ if mode == "single"
     catch e
         println("ARGERR ", e isa ArgumentError)
     end
+    exit(0)
+end
+
+if mode in ("exit", "slow")
+    # rank 2 exits (without an MPI error, so mpiexec keeps the job alive) or overruns the timeout at its first point
+    function g(x)
+        if rank == 2
+            mode == "exit" && exit(0)
+            sleep(4.0)
+        end
+        sleep(0.02)
+        return x^2
+    end
+    learner = Learner1D(g; bounds = (0.0, 1.0))
+    try
+        MPIExecutor(g; timeout = mode == "slow" ? 1.0 : Inf) do executor
+            BlockingRunner(learner; max_npoints = 40, executor)
+        end
+    catch e
+        println("LOST ", e isa AdaptivePort.EvaluationError, " ", sprint(showerror, e.exception))
+    end
+    println("RETURNED $rank")
     exit(0)
 end
 

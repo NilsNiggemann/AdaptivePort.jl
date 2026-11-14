@@ -31,6 +31,20 @@ end
         @test ok
         @test occursin("BODYERR 0 body failed", out)
     end
+    @testset "a rank that exits mid-evaluation fails its point instead of hanging" begin
+        ok, out = run_mpi("exit"; limit = 120)
+        @test ok
+        @test occursin("LOST true", out)
+        @test occursin("MPI rank 2 was lost: the process exited during the evaluation", out)
+        @test occursin("RETURNED 0", out)
+    end
+    @testset "a rank past the timeout fails its point, and the job still ends" begin
+        ok, out = run_mpi("slow"; limit = 120)
+        @test ok
+        @test occursin("LOST true", out)
+        @test occursin("exceeded the timeout of 1.0 s", out)
+        @test occursin("RETURNED 0", out)
+    end
     @testset "one rank is rejected" begin
         ok, out = run_mpi("single"; nranks = 1)
         @test ok

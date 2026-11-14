@@ -54,7 +54,7 @@ and rank 0 runs the learner:
 #SBATCH --ntasks-per-node=32
 #SBATCH --time=02:00:00
 julia --project -e 'using Pkg; Pkg.precompile()'
-srun julia --project mpi_script.jl       # or: mpiexec -n $SLURM_NTASKS julia --project mpi_script.jl
+srun --kill-on-bad-exit=1 julia --project mpi_script.jl       # or: mpiexec -n $SLURM_NTASKS julia --project mpi_script.jl
 ```
 
 !!! warning "Use the cluster's MPI library"

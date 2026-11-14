@@ -12,4 +12,5 @@
 # precompile once here, not in 128 ranks at the same time
 julia --project=examples -e 'using Pkg; Pkg.precompile()'
 
-srun julia --project=examples examples/phase_diagram/run_mpi.jl
+# --kill-on-bad-exit: a rank killed by a signal (out of memory, segfault) ends the job instead of leaving rank 0 waiting
+srun --kill-on-bad-exit=1 julia --project=examples examples/phase_diagram/run_mpi.jl

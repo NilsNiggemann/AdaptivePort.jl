@@ -26,16 +26,19 @@ concurrently: only the runner loop calls `ask` and `tell!`.
     same number of points reaches a somewhat higher loss. Measured speed-ups are on the
     [home page](../index.md#Performance).
 
-## Distributed.jl versus MPI
+## Distributed.jl, MPI or Dagger
 
-| | Distributed.jl | MPI |
-|:--|:--|:--|
-| Setup | `SlurmClusterManager.jl` starts the workers with `srun` | MPI.jl configured for the cluster's MPI |
-| Functions on workers | define with `@everywhere` | every rank runs the whole script |
-| A worker crashes | the run stops with an [`EvaluationError`](@ref) | the run hangs until the time limit |
-| Interactive use | add workers to a running REPL | batch jobs only |
+| | Distributed.jl | MPI | Dagger |
+|:--|:--|:--|:--|
+| Setup | `SlurmClusterManager.jl` starts the workers with `srun` | MPI.jl configured for the cluster's MPI | Distributed workers, registered with Dagger |
+| Functions on workers | define with `@everywhere` | every rank runs the whole script | named functions with `@everywhere` |
+| A worker crashes | the run stops with an [`EvaluationError`](@ref) | the same if the rank exits or the launcher ends the job (`srun --kill-on-bad-exit=1`); a rank stuck in `f` needs `timeout` | as Dagger reports it; not tested |
+| Interactive use | add workers to a running REPL | batch jobs only | add workers to a running REPL |
+| Overhead per evaluation | one remote call | one message each way | a scheduler round on top of a remote call |
 
-Use Distributed.jl unless your cluster or your `f` already relies on MPI.
+Use Distributed.jl unless your cluster or your `f` already relies on MPI. Dagger schedules graphs of dependent
+tasks; the learner already decides what to evaluate next and its evaluations are independent, so Dagger adds
+overhead and pays off only when `f` itself is a Dagger computation.
 
 ## Threads
 
@@ -104,16 +107,22 @@ MPI.mpiexec(m -> run(`$m -n 4 julia --project=examples examples/mpi.jl`))
 
 `ntasks` defaults to the number of ranks minus one.
 
-!!! danger "A crashed rank hangs the run"
-    A rank that dies (segfault, out of memory) is not detected: rank 0 waits for it forever, until the job's time
-    limit. Use `checkpoint` and a `duration` goal so that little is lost, or prefer `DistributedExecutor`, which
-    reports lost workers.
+!!! warning "Crashed ranks: set `timeout` on clusters"
+    A rank that leaves early on its own (`exit` inside `f`, an error outside `f`) tells rank 0, and its point
+    fails with an [`EvaluationError`](@ref). A rank killed by a signal (segfault, out of memory) cannot say
+    anything: MPI.jl's bundled `mpiexec` then ends the whole job, but `srun` without `--kill-on-bad-exit`, and
+    a rank stuck inside `f`, leave rank 0 waiting. Under Slurm use `srun --kill-on-bad-exit=1`. Pass `timeout` (seconds, longer than any normal evaluation)
+    to fail such a point and stop using its rank. Use `checkpoint` as well, so that a killed job loses little.
+    A timed-out rank that is still stuck keeps the MPI job alive after rank 0 is done; end the script with
+    `MPI.Abort(MPI.COMM_WORLD, 1)` on rank 0 if a warning reports timed-out ranks.
 
-- `MPIExecutor(body, f; comm = MPI.COMM_WORLD)` returns the value of `body` on rank 0 and `nothing` on the
+- `MPIExecutor(body, f; comm = MPI.COMM_WORLD, timeout = Inf)` returns the value of `body` on rank 0 and `nothing` on the
   others. Code after the block runs on every rank, so guard rank-0 work with `MPI.Comm_rank(comm) == 0`.
 - Every rank holds `f` itself; only points and results are sent (serialized Julia objects). The executor throws
   an `ArgumentError` if called with another function, so pass the learner's own `learner.f`.
-- A throwing `f` is reported to rank 0 as an `EvaluationError`, and the worker keeps serving.
+- A throwing `f` is reported to rank 0 as an `EvaluationError`, and the worker keeps serving. A lost or
+  timed-out rank gets no further points; once every rank is lost, all queued points fail. A timed-out rank whose
+  result arrives late is used again.
 - Leaving the block, normally or by an exception, sends a stop message to every worker. Workers finish their
   current evaluation first, so leaving takes as long as the slowest running evaluation; its result is dropped.
 - At least 2 ranks are needed (`ArgumentError` otherwise). All MPI calls run on the thread that called

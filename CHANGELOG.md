@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `MPIExecutor` no longer hangs when a worker rank leaves early: a rank that exits (also via `exit` inside `f`) or
+  fails outside `f` reports it, and its point fails with an `EvaluationError`. New keyword `timeout` fails an
+  evaluation that runs too long (a rank killed by a signal under `srun`, or stuck) and stops using its rank.
+
 ## 0.1.0 (unreleased)
 
 First release. A Julia implementation of [Python Adaptive](https://github.com/python-adaptive/adaptive):
@@ -41,5 +47,5 @@ which upstream items exist and every deviation.
 - `.jls` files depend on the Julia version and the package's types; use CSV to exchange data.
 - An `IntegratorLearner` reloaded from a table replays its refinement path and may drop points that a parallel
   run evaluated off that path.
-- A crashed MPI rank is not detected and makes the run hang. Dagger on MPI is not covered.
+- Dagger on MPI is not covered.
 - `Learner2D` rebuilds its Delaunay triangulation on every `ask` (about 7 ms at 1000 points).

@@ -57,7 +57,7 @@ struct DaggerExecutor{O}
 end
 
 """
-    MPIExecutor(body, f; comm = MPI.COMM_WORLD)
+    MPIExecutor(body, f; comm = MPI.COMM_WORLD, timeout = Inf)
 
 Evaluate `f` on the ranks of an MPI job with native MPI.jl (package extension; needs `using MPI` and `MPI.Init()`).
 All ranks run the same script: rank 0 runs `body(executor)` (typically a runner), the other ranks serve `f` until rank
@@ -65,8 +65,11 @@ All ranks run the same script: rank 0 runs `body(executor)` (typically a runner)
 function. `default_ntasks` is the number of ranks minus one, so at least two ranks are needed.
 
 Returns the value of `body` on rank 0 and `nothing` on the other ranks. Leaving `body` (normally or by an exception)
-stops every worker after its current evaluation; results of abandoned evaluations are received and dropped. A crashed
-rank is not detected and makes the run hang.
+stops every worker after its current evaluation; results of abandoned evaluations are received and dropped.
+
+A worker that leaves early (`exit` in `f`, an error outside `f`) reports it, and its point fails. A rank killed by a
+signal is only noticed if `mpiexec` ends the job (MPI.jl's bundled MPICH does) or through `timeout`: an evaluation
+running longer than `timeout` seconds fails, and its rank gets no new points unless its result arrives later.
 
 ```julia
 MPIExecutor(learner.f) do executor      # ranks > 0 serve f here and skip the block
