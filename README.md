@@ -47,6 +47,10 @@ Adaptive sampling of a three-dimensional function:
 
 ![LearnerND 3D example](docs/src/assets/learnernd_3d.png)
 
+Adaptive sampling of a phase diagram:
+
+![Adaptive phase diagram sampling](docs/src/assets/phase_diagram.png)
+
 ## Learners and features
 
 - `Learner1D`, `Learner2D`, `LearnerND`: sampling on an interval, a rectangle and an N-dimensional box; scalar or
