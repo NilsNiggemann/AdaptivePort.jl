@@ -37,6 +37,16 @@ tris = triangles(learner)       # Delaunay triangles as index triples into data.
 
 You can also drive a learner yourself with `ask(learner, n)` and `tell!(learner, x, y)`.
 
+## Examples
+
+Adaptive sampling of a two-dimensional spin-ice function:
+
+![Learner2D spin-ice example](docs/src/assets/learner2d_spinice.png)
+
+Adaptive sampling of a three-dimensional function:
+
+![LearnerND 3D example](docs/src/assets/learnernd_3d.png)
+
 ## Learners and features
 
 - `Learner1D`, `Learner2D`, `LearnerND`: sampling on an interval, a rectangle and an N-dimensional box; scalar or
