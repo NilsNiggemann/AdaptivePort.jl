@@ -104,3 +104,11 @@ For [`LearnerND`](@ref), `simplices(learner)` gives the simplices; `examples/lea
 slab of a three-dimensional sampling together with a Voronoi cutaway:
 
 ![LearnerND on a distorted shell](../assets/learnernd_shell.png)
+
+`examples/learnernd_3d.jl` draws the same kind of sampling with real 3D rendering (depth and lighting) in
+[GLMakie](https://docs.makie.org/stable/explanations/backends/glmakie): the samples as lit spheres, the
+$f = 0.5$ isosurface of the learner's own tetrahedra (marching tetrahedra on `simplices(learner)`), and three
+orthogonal slices. It needs an OpenGL context and opens a rotatable window; run it with
+`julia --project=examples examples/learnernd_3d.jl`.
+
+![LearnerND shell in 3D](../assets/learnernd_3d.png)
