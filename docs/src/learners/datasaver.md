@@ -17,5 +17,7 @@ This is `examples/datasaver.jl`. Everything else (`ask`, `loss`, `result`, `npoi
 `saver.learner`, and the runner calls the child's function and tells the full result.
 
 - Telling a repeated point overwrites the stored result, as upstream, even where the child keeps its first value.
-- `to_table(saver)` adds an `extra_data` column. It is not numeric, so [`save_data`](@ref) needs a `.jls` path
-  (or save `saver.learner`, which loses the extra results). See [Saving and export](saving.md).
+
+!!! warning "Save to `.jls`, not `.csv`"
+    `to_table(saver)` adds an `extra_data` column, which is not numeric, so [`save_data`](@ref) needs a `.jls`
+    path. Saving `saver.learner` to CSV works but loses the extra results. See [Saving data](../saving.md).

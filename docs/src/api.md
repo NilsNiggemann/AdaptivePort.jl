@@ -1,8 +1,8 @@
 # API reference
 
-Every docstring appears in exactly one `@docs` block. The learners of the Stage-4 pages
-([`LearnerND`](@ref), [`AverageLearner`](@ref), [`AverageLearner1D`](@ref), [`IntegratorLearner`](@ref),
-[`SequenceLearner`](@ref)) are documented on their own pages; everything else is here.
+Docstrings of all exported and selected internal names. The docstrings of [`LearnerND`](@ref),
+[`AverageLearner`](@ref), [`AverageLearner1D`](@ref), [`IntegratorLearner`](@ref) and [`SequenceLearner`](@ref)
+are at the end of their [learner pages](learners/learnernd.md); everything else is here.
 
 ## Learner interface
 

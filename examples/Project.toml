@@ -7,7 +7,11 @@ Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 MakieHelpers = "769ed66a-a1e3-4c16-885f-a5b16fb973c2"
 NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+SlurmClusterManager = "c82cd089-7bf7-41d7-976b-6b5d413cbe0a"
 
 [sources]
 AdaptivePort = {path = ".."}
 MakieHelpers = {url = "https://github.com/NilsNiggemann/MakieHelpers.jl.git"}
+
+[compat]
+SlurmClusterManager = "1.1"

@@ -31,6 +31,11 @@ which upstream items exist and every deviation.
 - `to_table` (named tuple of columns), `save_data` and `load_data!`: CSV for numeric tables, `Serialization`
   (`.jls`, or any other extension) for everything else; writes are atomic.
 
+### Documentation
+- Docs in sections: Introduction (overview, getting-started tutorial), Examples (plotting, a phase diagram on 4
+  Slurm nodes with Distributed.jl or MPI in `examples/phase_diagram/`), Learners, Runners (running, parallel
+  execution, clusters), Saving data and Reference.
+
 ### Known limitations
 - No retries and no custom goal callable; abandoned evaluations keep running after a stop.
 - `.jls` files depend on the Julia version and the package's types; use CSV to exchange data.

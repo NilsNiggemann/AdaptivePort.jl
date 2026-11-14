@@ -1,15 +1,18 @@
-# Plotting
+# Plotting results
 
 AdaptivePort.jl has no plotting code and no Makie dependency: the data accessors give everything a plot needs,
 and the recipes below use [CairoMakie](https://docs.makie.org) and
 [DelaunayTriangulation.jl](https://github.com/JuliaGeometry/DelaunayTriangulation.jl). The scripts
 `examples/learner1d_plot.jl`, `examples/learner2d_rings.jl`, `examples/learner2d_spinice.jl` and
 `examples/learnernd_shell.jl` produce the figures of these docs; run them with `julia --project=examples`.
-For publication styling follow your own theme; the examples use `MakieHelpers`.
+They use the `MakieHelpers` theme; the recipes below use plain CairoMakie.
 
 `result(learner)`, `triangles(learner)` and `to_table(learner)` return copies and never change the learner, so
-you can plot while a runner is working (read from the task that started it, see
-[Runners](runners.md)).
+you can plot while a runner is working.
+
+!!! warning "Plotting during a run"
+    Read the learner only from the task that started the runner (usually the REPL), never from another
+    thread. See [Asynchronous runs](../runners/runners.md#Asynchronous-runs).
 
 ## One dimension
 
@@ -30,7 +33,7 @@ scatter!(ax, data.x, data.y; color = :red, markersize = 5)
 fig
 ```
 
-![Learner1D versus a uniform grid](assets/learner1d_vs_uniform.png)
+![Learner1D versus a uniform grid](../assets/learner1d_vs_uniform.png)
 
 ## Two dimensions
 
@@ -82,11 +85,13 @@ scatter!(ax, xy; color = :white, markersize = 2)
 ```
 
 `AdaptivePort.delaunay(points)` is the triangulation helper the package itself uses (unexported). Pass it
-points in the order of `result(learner).points`, so that cell `j` belongs to sample `j`.
+points in the order of `result(learner).points`, so that cell `j` belongs to sample `j`. The
+[phase diagram](phase_diagram.md) uses the same recipe for a vector-valued learner, colouring each cell by a
+combination of its components.
 
-![Learner2D versus a uniform grid](assets/learner2d_rings.png)
+![Learner2D versus a uniform grid](../assets/learner2d_rings.png)
 
-![Learner2D on the spin-ice structure factor in the (h, h, l) plane](assets/learner2d_spinice.png)
+![Learner2D on the spin-ice structure factor in the (h, h, l) plane](../assets/learner2d_spinice.png)
 
 The second figure shows 2000 samples of the neutron structure factor $S(\mathbf{q})$ of nearest-neighbour
 classical spin ice in the self-consistent Gaussian approximation ($T = 0.001$ in units of the effective Ising
@@ -98,4 +103,4 @@ coupling), in the plane $q_x = q_y$ of reciprocal space. The samples concentrate
 For [`LearnerND`](@ref), `simplices(learner)` gives the simplices; `examples/learnernd_shell.jl` draws a
 slab of a three-dimensional sampling together with a Voronoi cutaway:
 
-![LearnerND on a distorted shell](assets/learnernd_shell.png)
+![LearnerND on a distorted shell](../assets/learnernd_shell.png)

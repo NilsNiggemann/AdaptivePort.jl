@@ -13,7 +13,10 @@ Julia port of [Python Adaptive](https://github.com/python-adaptive/adaptive). St
 - `test/runtests.jl` includes `test/test_<concept>.jl`.
 - `examples/` — runnable scripts: `julia --project=. examples/learner1d.jl`; plotting and Distributed/Dagger/MPI
   ones need `--project=examples` (its Manifest is git-ignored).
-- `docs/` — Documenter (one page per topic, `docs/src/api.md` holds every `@docs` block); build with `julia --project=docs docs/make.jl`
+- `docs/` — Documenter. Sections: Introduction (`index.md`, `getting_started.md`), Examples (`examples/`), Learners
+  (`learners/`, one page per learner + `interface.md`), Runners (`runners/`), `saving.md`, Reference (`compatibility.md`,
+  `api.md`). Use admonitions (`!!! tip/note/warning/danger`) for pitfalls; advanced detail goes in "Advanced:" subsections.
+  `docs/src/api.md` holds most `@docs` blocks; build with `julia --project=docs docs/make.jl`
   (needs `Pkg.develop(path=".")` in the docs env, as CI does). Build from inside the git checkout,
   otherwise Documenter fails to find the remote. `makedocs` errors on any docstring (including the
   module's) missing from an `@docs` block.

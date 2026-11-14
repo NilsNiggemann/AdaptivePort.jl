@@ -15,7 +15,16 @@ result(learner)                    # (mean, std, n)
 
 `examples/average_learner.jl` is the runnable script.
 
-## Algorithm
+!!! danger "The seed must be the only source of randomness"
+    `f(seed)` must return the same sample for the same seed and independent samples for different seeds. Seed
+    a local generator from it, as above (`Random.Xoshiro(seed)`), never the global RNG: with the global RNG,
+    parallel runs and resumed runs repeat or correlate samples, and the error estimate is wrong.
+
+!!! tip "No `tol` needed"
+    The learner has its own goal: `atol` (absolute) and/or `rtol` (relative) on the standard error of the mean.
+    A runner without `tol` stops when it is reached.
+
+## Advanced: algorithm
 
 With $n$ samples, sample standard deviation $s$ and mean $\bar y$, the standard error is
 $s / \sqrt{n}$. The loss is that error divided by `atol`, or by `rtol` times $\lvert \bar y \rvert$,
@@ -29,7 +38,7 @@ instead.
 
 Float64 only. The mean and variance come from running sums of $y$ and $y^2$ (as upstream), which
 loses precision when the mean is much larger than the standard deviation. The standard error assumes
-independent samples. Differences to upstream: [Deviations](index.md#Deviations-from-Python-Adaptive).
+independent samples. Differences to upstream: [Deviations](../compatibility.md#Deviations-from-Python-Adaptive).
 
 ## API
 

@@ -1,4 +1,4 @@
-# Saving and export
+# Saving data
 
 Learners never store the function, so saving means writing the told data and replaying it later.
 
@@ -10,7 +10,7 @@ load_data!(fresh, "run.csv")         # replays tell!; throws ArgumentError if th
 ```
 
 `examples/save_load.jl` checkpoints a run, stops it on a time goal, reloads and continues. A runner can
-write the file itself with `checkpoint = path` ([Runners](runners.md#Checkpoint-and-resume)).
+write the file itself with `checkpoint = path` ([Checkpoints and resuming](runners/runners.md#Checkpoints-and-resuming)).
 
 ## Tables
 
@@ -37,13 +37,19 @@ holding the table with a format tag and version; it is much faster (1e6 points: 
 `.jls`, see [Performance](index.md#Performance)) and can hold non-numeric columns such as a
 [`DataSaver`](@ref)'s `extra_data`.
 
-Both are written to a temporary file and moved over the target, so a crash never leaves half a file.
+!!! tip "Crash-safe writes"
+    Both formats are written to a temporary file and then moved over the target, so a crash never leaves half a
+    file. A checkpoint is always either the old or the new data.
 
 ## Limits
 
 - Only told points are saved; pending points are not.
-- `.jls` files depend on the Julia version, and loading one runs `deserialize`: load only your own files.
+- `.jls` files depend on the Julia version; use CSV for long-term storage.
 - `.csv` needs numeric columns; otherwise `save_data` throws `ArgumentError`.
 - After `load_data!` the data are identical, but later sampling can differ from an uninterrupted run where a
   learner's state depends on history (the lazy $y$-scale of `Learner1D`), as upstream.
 - `load_data!` needs a fresh learner built with the same function and bounds.
+
+!!! danger "Load only your own `.jls` files"
+    Loading a `.jls` file runs Julia's `deserialize`, which can execute arbitrary code. Never load `.jls` files
+    from untrusted sources; CSV is safe.

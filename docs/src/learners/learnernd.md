@@ -1,7 +1,7 @@
 # LearnerND
 
 [`LearnerND`](@ref) samples a function $f: \mathbb{R}^N \to \mathbb{R}^M$ on a box, with scalar
-values or `vdim = M` components (see [Vector-valued functions](index.md#Vector-valued-functions)).
+values or `vdim = M` components (see [Vector-valued functions](learner1d.md#Vector-valued-functions)).
 Points are `NTuple{N}`.
 
 ```julia
@@ -24,14 +24,14 @@ cells = simplices(learner)    # index tuples of length N + 1 into data.points
 
 ## Example: a distorted shell
 
-![LearnerND on a distorted spherical shell: a slab through the middle and a cutaway with Voronoi cuts](assets/learnernd_shell.png)
+![LearnerND on a distorted spherical shell: a slab through the middle and a cutaway with Voronoi cuts](../assets/learnernd_shell.png)
 
 5000 samples of a thin spherical shell whose radius is modulated sinusoidally in the angles. The samples
 concentrate on the shell. Left: the samples in the slab ``|z| < 0.1``. Right: the octant facing the camera is
 cut open, and its three bounding planes are coloured by the value of the nearest sample (Voronoi cuts of the
 data). `examples/learnernd_shell.jl` produces the figure.
 
-## Algorithm
+## Advanced: algorithm
 
 The evaluated points are kept in an incrementally updated Delaunay triangulation
 ([`AdaptivePort.TriangulationND`](@ref)): a new point deletes the simplices whose circumsphere contains it
@@ -56,6 +56,10 @@ sub-simplex.
 
 ## Limits
 
+!!! warning "Practical up to four dimensions"
+    Cost per point grows quickly with the dimension $N$. $N \le 4$ is practical for thousands of points, $N = 5$
+    for a few hundred, $N \ge 6$ is not practical (see the table below).
+
 The triangulation locates points by a linear scan and scans the hull, so cost grows quickly with the
 dimension (single-threaded, measured):
 
@@ -67,7 +71,7 @@ dimension (single-threaded, measured):
 
 $N = 5$ is practical for a few hundred points (`tell!` at 300 points takes about 54 ms), $N \ge 6$ is
 not (about 0.9 s per `tell!` at 150 points). Differences to upstream are listed under
-[Deviations](index.md#Deviations-from-Python-Adaptive).
+[Deviations](../compatibility.md#Deviations-from-Python-Adaptive).
 
 ## API
 

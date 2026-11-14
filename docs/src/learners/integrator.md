@@ -16,7 +16,7 @@ result(learner)                     # (integral, error, npoints)
 
 `examples/integrator.jl` also shows a manual `ask`/`tell!` loop.
 
-## Algorithm
+## Advanced: algorithm
 
 Each interval holds a Clenshaw-Curtis rule of 5, 9, 17 or 33 nodes, so refining an interval reuses
 all points evaluated before. The error estimate of an interval is the $L_2$ distance of two
@@ -35,15 +35,17 @@ it has none.
 
 ## Limits
 
+!!! warning "Parallel runs can stop early"
+    When values are told out of order, or asked in batches as a parallel runner does, `done` can fire with an
+    error estimate well above `tol` (upstream issue #96). For $e^x$ on $(0, 1)$ with `tol = 1e-10` and batch size
+    8 the error estimate is $1.4 \cdot 10^{-6}$ at 40 points, as upstream. The result is still within its
+    *reported* error: check `result(learner).error`.
+
 - Float64 only.
-- When values are told out of order, or asked in batches as the parallel runner does, `done` can fire
-  with an error estimate well above `tol` (upstream issue #96): for $e^x$ on $(0, 1)$ with
-  `tol = 1e-10` and batch size 8 the error estimate is $1.4 \cdot 10^{-6}$ at 40 points, as upstream.
-  The result is still within its reported error.
 - `DivergentIntegralError` is thrown by `tell!` or `ask` when the integral appears to diverge.
 - `tell_pending!` and `remove_unfinished!` do nothing, as upstream.
 
-Further differences: [Deviations](index.md#Deviations-from-Python-Adaptive).
+Further differences: [Deviations](../compatibility.md#Deviations-from-Python-Adaptive).
 
 ## API
 

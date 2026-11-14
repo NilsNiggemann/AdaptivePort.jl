@@ -21,9 +21,17 @@ This is `examples/balancing.jl`. [`AdaptivePort.from_product`](@ref) builds the 
 b = AdaptivePort.from_product((x; a, b) -> a * x + b, Learner1D, (bounds = (-1, 1),), (a = 1:3, b = [0.0, 1.0]))
 ```
 
-- Children must be the same type and have comparable losses; otherwise pick `:npoints` or `:cycle`.
-- Telling a child directly bypasses the balancer's caches: use `tell!(balancer, (i, x), y)`.
+!!! warning "Tell children through the balancer"
+    The balancer caches the children's proposals and losses. Telling a child directly leaves those caches
+    stale; use `tell!(balancer, (i, x), y)`.
+
+!!! tip "Choosing a strategy"
+    All children must be the same kind of learner (for example all `Learner1D`); otherwise the constructor
+    throws an `ArgumentError`. `:loss_improvements` (default) and `:loss` compare the children's losses. If the
+    losses are not comparable (different `loss_per_interval`, say), use `:npoints` (equal point counts) or
+    `:cycle` (round robin).
+
 - `result(balancer)` is the vector of child results; `to_table` stacks the child tables with a `learner_index`
-  column, and [`save_data`](@ref) writes the whole balancer to one file ([Saving and export](saving.md)).
+  column, and [`save_data`](@ref) writes the whole balancer to one file ([Saving and export](../saving.md)).
 - `done(balancer)` without `tol` works when the children have their own goal (for example
   [`SequenceLearner`](@ref)); then the runner stops when all are done.

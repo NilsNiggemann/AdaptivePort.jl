@@ -16,7 +16,12 @@ data.values                # [1, 2, 3]
 
 `examples/sequence.jl` is the runnable script.
 
-## Algorithm
+!!! tip "Use it for parallel maps with checkpoints"
+    `SequenceLearner` is the simplest way to get the runner's features for a plain list of jobs: parallel
+    executors, time limits, cancellation and [checkpoints](../saving.md). Pass a concrete `value_type` for a
+    concretely typed result.
+
+## Advanced: algorithm
 
 There is nothing adaptive: `ask` returns the lowest indices that are neither told nor pending. The
 loss is the fraction of elements not told yet, so `done(learner)` (without `tol`) means that every
@@ -27,7 +32,7 @@ stored values; use a concrete type for a concretely typed result.
 ## Limits
 
 Telling an index again is ignored. Differences to upstream:
-[Deviations](index.md#Deviations-from-Python-Adaptive).
+[Deviations](../compatibility.md#Deviations-from-Python-Adaptive).
 
 ## API
 

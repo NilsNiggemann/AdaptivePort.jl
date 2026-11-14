@@ -19,7 +19,15 @@ nsamples(learner)      # all samples; npoints(learner) counts distinct x
 `examples/average_learner1d.jl` prints how the samples spread: the noisy right half gets far more
 samples than the quiet left half.
 
-## Algorithm
+!!! danger "The seed must be the only source of randomness"
+    `f(seed, x)` must be reproducible for the same `(seed, x)`. Seed a local generator from both (as above,
+    `Random.Xoshiro(hash((seed, x)))`), never the global RNG; otherwise the error bars are wrong.
+
+!!! note "Two kinds of point counts"
+    `npoints(learner)` counts distinct `x`, so `max_npoints` limits the number of $x$ values, not of samples.
+    `nsamples(learner)` counts all samples.
+
+## Advanced: algorithm
 
 An inner [`Learner1D`](@ref) holds the sample means and chooses where a new $x$ goes, with the usual
 interval loss. Each $x$ also has an `error`: the half-width of the confidence interval of its mean,
@@ -43,7 +51,7 @@ loss of the means; `loss(learner; real = false)` lets pending $x$ split their in
 
 Resampling cost is a linear scan over the $x$ per `ask`. `max_samples` is not enforced when
 `ask(l, n)` is called with $n > 1$ (as upstream). Differences to upstream:
-[Deviations](index.md#Deviations-from-Python-Adaptive).
+[Deviations](../compatibility.md#Deviations-from-Python-Adaptive).
 
 ## API
 

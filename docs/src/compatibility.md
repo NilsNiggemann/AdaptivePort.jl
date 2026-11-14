@@ -60,7 +60,7 @@ The behaviour is checked against upstream's `tests/test_learners.py` in `test/te
 | `to_dataframe` | equivalent | `to_table(learner)`, a Tables.jl column table; no pandas columns for function arguments. |
 | `load_dataframe` | equivalent | `load_table!` (unexported) or `load_data!` from a file. |
 | `save(fname)` / `load(fname)` | deviation | `save_data(path, learner)` / `load_data!(learner, path)`; CSV or `Serialization`, not pickle. |
-| `plot()`, `interpolator`, `interpolated_on_grid` | missing | Plotting is docs-only recipes (CairoMakie); see the Plotting page. `triangles` and `to_table` give the data. |
+| `plot()`, `interpolator`, `interpolated_on_grid` | missing | Plotting is docs-only recipes (CairoMakie); see [Plotting results](examples/plotting.md). `triangles` and `to_table` give the data. |
 | `learner.function` | equivalent | The field `learner.f`. |
 | `learner.bounds`, `learner.data` attributes | equivalent | Not guaranteed API; use `result`. |
 | `AverageLearner1D.tell_many_at_point` | missing | Loop over `tell!`. |
@@ -138,7 +138,7 @@ All learners:
 - `done(learner; tol)` exists; upstream expresses goals through runners (`loss_goal`).
 - Not implemented: neighbour-based losses (`nth_neighbors`, curvature) and optimized bulk `tell_many`.
 
-`LearnerND` (see [its page](learnernd.md)):
+`LearnerND` (see [its page](learners/learnernd.md)):
 
 - No convex-hull bounds, interpolator, plotting, `anisotropic`, `triangulation_backend` or
   neighbour-based losses (`triangle_loss`, `curvature_loss_function`).
@@ -151,13 +151,13 @@ All learners:
   of scipy (the same result for points in general position). A failed insertion throws and leaves
   the triangulation unchanged. Asked points are clamped to the box.
 
-`AverageLearner` (see [its page](average_learner.md)):
+`AverageLearner` (see [its page](learners/average_learner.md)):
 
 - `ask` hands out the smallest seeds that are neither told nor pending; upstream starts at
   told plus pending and may skip a free low seed.
 - `result` is `(mean, std, n)`. Float64 only.
 
-`AverageLearner1D` (see [its page](average_learner1d.md)):
+`AverageLearner1D` (see [its page](learners/average_learner1d.md)):
 
 - An undersampled $x$ is picked as the smallest such $x$; upstream picks an arbitrary set element.
 - Pending bounds are excluded from re-asking; upstream re-asks a pending bound.
@@ -169,7 +169,7 @@ All learners:
   distinct $x$.
 - No `tell_many_at_point`, plotting or dataframes.
 
-`IntegratorLearner` (see [its page](integrator.md)):
+`IntegratorLearner` (see [its page](learners/integrator.md)):
 
 - `result` is `(integral, error, npoints)`. Float64 only.
 - `ask(...; tell_pending = false)` re-queues the asked points (no snapshot); `tell!` drops told
@@ -185,7 +185,7 @@ All learners:
   Example: `exp` on $(0, 1)$, `tol = 1e-10`, batch size 8 gives an error estimate of $1.4 \cdot
   10^{-6}$ at 40 points, identical to upstream. The result is still within its reported error.
 
-`SequenceLearner` (see [its page](sequence.md)):
+`SequenceLearner` (see [its page](learners/sequence.md)):
 
 - The index is 1-based.
 - `result` is `(indices, values)` of the told elements and works before completion; upstream raises
