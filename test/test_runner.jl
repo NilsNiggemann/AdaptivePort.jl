@@ -159,6 +159,47 @@ open!(g::Gate, n = 1) = foreach(_ -> put!(g.release, nothing), 1:n)
         @test status(r) === :finished
     end
 
+    @testset "drain: in-flight points finish after the deadline" begin
+        # without drain the two blocked points are dropped (see above); with drain they are told
+        g = Gate()
+        l = Learner1D(g; bounds = (0, 1))
+        r = AsyncRunner(l; duration = 0.2, ntasks = 2, drain = 30)
+        @test timedwait(() -> g.started[] == 2, 30.0) === :ok
+        sleep(0.5)                      # past the deadline, still blocked
+        @test !istaskdone(r.task)
+        open!(g, 2)
+        @test status(wait(r)) === :finished
+        @test npoints(l) == 2 && isempty(pending_points(l)) && g.started[] == 2   # no new points while draining
+
+        # drain timeout: still-blocked points are abandoned
+        g = Gate()
+        l = Learner1D(g; bounds = (0, 1))
+        t = @elapsed r = BlockingRunner(l; duration = 0.2, ntasks = 2, drain = 0.5)
+        @test status(r) === :finished && t < 10 && npoints(l) == 0 && isempty(pending_points(l))
+        open!(g, 2)
+
+        # cancel! ends the drain
+        g = Gate()
+        l = Learner1D(g; bounds = (0, 1))
+        r = AsyncRunner(l; duration = 0.1, ntasks = 2, drain = 60)
+        @test timedwait(() -> g.started[] == 2, 30.0) === :ok
+        sleep(0.3)
+        cancel!(r)
+        @test timedwait(() -> istaskdone(r.task), 10.0) === :ok
+        @test status(r) === :cancelled
+        open!(g, 2)
+
+        # a failure among drained points is thrown (deadline 3 s: compiling run! for a new f can take > 1 s)
+        started = Threads.Atomic{Int}(0)
+        f(x) = (Threads.atomic_add!(started, 1); sleep(5); throw(DomainError(x)))
+        r = AsyncRunner(Learner1D(f; bounds = (0, 1)); duration = 3, ntasks = 2, drain = 30)
+        err = try wait(r); nothing catch e; e end
+        @test started[] == 2   # both points were launched before the deadline, so they were drained
+        @test err isa EvaluationError
+
+        @test_throws ArgumentError AsyncRunner(Learner1D(identity; bounds = (0, 1)); duration = 1, drain = -1)
+    end
+
     @testset "checkpoints" begin
         dir = mktempdir()
         # written on every kind of stop: goal, deadline, cancel, failure

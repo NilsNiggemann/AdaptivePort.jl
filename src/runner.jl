@@ -26,7 +26,7 @@ struct Outcome{P, Y}
 end
 
 struct Wakeup
-    reason::Symbol  # :cancel, :deadline or :checkpoint
+    reason::Symbol  # :cancel, :deadline, :checkpoint or :drain
 end
 
 """
@@ -74,7 +74,7 @@ end
 """
     AsyncRunner(learner; tol = nothing, max_npoints = nothing, duration = nothing, end_time = nothing,
                 executor = ThreadedExecutor(), ntasks = default_ntasks(executor),
-                checkpoint = nothing, checkpoint_interval = 30)
+                checkpoint = nothing, checkpoint_interval = 30, drain = 0)
 
 Start learning `learner.f` in the background and return the [`Runner`](@ref) immediately.
 
@@ -86,7 +86,9 @@ It stops when `loss(learner) <= tol` (without `tol`: when `done(learner)`, for l
 criterion), when `npoints(learner) >= max_npoints`, at the deadline, when `ask` returns no points and nothing is in
 flight (the learner is resolved to its numerical limit), after [`cancel!`](@ref), or when an evaluation throws. On
 every stop, results that have already arrived are told, evaluations still running are abandoned (they cannot be
-interrupted; their results are dropped), and `remove_unfinished!(learner)` clears the pending points.
+interrupted; their results are dropped), and `remove_unfinished!(learner)` clears the pending points. With
+`drain > 0`, a stop at a goal or the deadline first waits up to `drain` seconds for the evaluations in flight and
+tells their results; no new points are asked for meanwhile.
 
 The loop runs in a task pinned to the caller's thread (`@async`) and is the only code that touches the learner, so the
 learner is mutated on the caller's thread at the caller's yield points (`sleep`, `wait`, I/O). Reading
@@ -105,6 +107,10 @@ learner is mutated on the caller's thread at the caller's yield points (`sleep`,
 - `checkpoint`: a file path; the runner calls [`save_data`](@ref)`(checkpoint, learner)` every
   `checkpoint_interval` seconds and once more when it stops for any reason, including a failure.
 - `checkpoint_interval`: seconds between checkpoints.
+- `drain`: seconds to wait for the evaluations in flight after a goal or deadline stop (not after `cancel!` or a
+  failure). Their results are told; a failure among them is thrown as usual. Points still running after `drain`
+  seconds are abandoned. Use it when the executor's workers are shut down after the run: a worker removed while it
+  still evaluates (e.g. `rmprocs`) exits with threads running, which can crash it.
 
 Without `tol`, `max_npoints`, `duration` and `end_time`, the runner runs until `cancel!` or until `ask` returns nothing.
 
@@ -118,13 +124,14 @@ Without `tol`, `max_npoints`, `duration` and `end_time`, the runner runs until `
 **See Also**
 - [`BlockingRunner`](@ref), [`status`](@ref), [`cancel!`](@ref)
 """
-function AsyncRunner(learner::AbstractLearner; tol = nothing, max_npoints = nothing, duration = nothing, end_time = nothing, executor = ThreadedExecutor(), ntasks::Integer = default_ntasks(executor), checkpoint = nothing, checkpoint_interval::Real = 30)
+function AsyncRunner(learner::AbstractLearner; tol = nothing, max_npoints = nothing, duration = nothing, end_time = nothing, executor = ThreadedExecutor(), ntasks::Integer = default_ntasks(executor), checkpoint = nothing, checkpoint_interval::Real = 30, drain::Real = 0)
     ntasks >= 1 || throw(ArgumentError("ntasks must be positive, got $ntasks"))
+    drain >= 0 || throw(ArgumentError("drain must be non-negative, got $drain"))
     checkpoint_interval > 0 || throw(ArgumentError("checkpoint_interval must be positive, got $checkpoint_interval"))
     goals = Goals(tol, max_npoints, deadline_of(duration, end_time))
     r = Runner(learner)
     # @async, not Threads.@spawn: sticky to the caller's thread, so the learner never races with the caller.
-    r.task = @async run!(r, goals, executor, Int(ntasks), checkpoint, Float64(checkpoint_interval))
+    r.task = @async run!(r, goals, executor, Int(ntasks), checkpoint, Float64(checkpoint_interval), Float64(drain))
     return r
 end
 
@@ -166,8 +173,41 @@ function launch(r::Runner, executor, f, x)
     return nothing
 end
 
+# Tell one outcome; returns the updated (inflight, failure).
+function handle!(l, ev::Outcome, inflight, failure)
+    if ev.value isa EvaluationError
+        failure === nothing && (failure = ev.value)
+    else
+        tell!(l, ev.point, ev.value)
+    end
+    return inflight - 1, failure
+end
+
+# After a goal stop: wait up to `drain` seconds for the `inflight` evaluations, telling their results. Stops early on
+# `cancel!`. Returns the first failure among them, or `nothing`.
+function drain!(r::Runner, l, inflight, drain, checkpoint)
+    (inflight == 0 || drain <= 0) && return nothing
+    failure = nothing
+    timer = Timer(_ -> put!(r.events, Wakeup(:drain)), drain)
+    try
+        while inflight > 0 && !@atomic(r.cancelled)
+            ev = take!(r.events)
+            if ev isa Outcome
+                inflight, failure = handle!(l, ev, inflight, failure)
+            elseif ev.reason === :checkpoint
+                save_data(checkpoint, l)
+            elseif ev.reason === :drain
+                break
+            end
+        end
+    finally
+        close(timer)
+    end
+    return failure
+end
+
 # The runner loop; returns the final status, `:finished` or `:cancelled`, or throws the first `EvaluationError`.
-function run!(r::Runner, g::Goals, executor, ntasks, checkpoint, interval)
+function run!(r::Runner, g::Goals, executor, ntasks, checkpoint, interval, drain = 0.0)
     l = r.learner
     timers = Timer[]
     isfinite(g.deadline) && push!(timers, Timer(_ -> put!(r.events, Wakeup(:deadline)), max(0.0, g.deadline - time())))
@@ -178,7 +218,11 @@ function run!(r::Runner, g::Goals, executor, ntasks, checkpoint, interval)
         while true
             @atomic(r.cancelled) && return :cancelled
             failure === nothing || throw(failure)
-            goal_reached(l, g) && return :finished
+            if goal_reached(l, g)
+                failure = drain!(r, l, inflight, drain, checkpoint)
+                failure === nothing || throw(failure)
+                return @atomic(r.cancelled) ? :cancelled : :finished
+            end
             nfree = ntasks - inflight
             g.max_npoints === nothing || (nfree = min(nfree, g.max_npoints - npoints(l) - inflight))
             if nfree > 0
@@ -192,12 +236,7 @@ function run!(r::Runner, g::Goals, executor, ntasks, checkpoint, interval)
             ev = take!(r.events)
             while true
                 if ev isa Outcome
-                    inflight -= 1
-                    if ev.value isa EvaluationError
-                        failure === nothing && (failure = ev.value)
-                    else
-                        tell!(l, ev.point, ev.value)
-                    end
+                    inflight, failure = handle!(l, ev, inflight, failure)
                 elseif ev.reason === :checkpoint
                     save_data(checkpoint, l)
                 end

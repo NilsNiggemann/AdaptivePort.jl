@@ -10,7 +10,10 @@ it runs locally, and its job scripts are templates. This page collects the job-s
        no internet), and precompile in the job script before starting many processes:
        `julia --project -e 'using Pkg; Pkg.precompile()'`. Otherwise every process precompiles at the same time.
     2. Set `checkpoint = path`, so that a job killed at the time limit loses little.
-    3. Set `duration` a few minutes below the job's time limit, so the runner stops cleanly and saves.
+    3. Set `duration` a few minutes below the job's time limit, so the runner stops cleanly and saves. With slow
+       points, also set `drain` (the longest point time) and keep `duration + drain` below the limit: the runner
+       then finishes the points in flight, and the workers are idle when the script ends or calls `rmprocs`.
+       Removing workers that are still evaluating can crash them (seen as segfaults on Julia 1.12).
     4. Start with `isfile(path) && load_data!(learner, path)`, so that resubmitting the job continues the run.
     5. Check that each evaluation is slow enough to keep all workers busy
        (see [Number of workers](../examples/phase_diagram.md#Number-of-workers)).
