@@ -31,6 +31,15 @@ using Distributed
         @test err.point > 0.5
         @test err.exception.ex isa DomainError
 
+        # drain: points in flight at the deadline finish on the workers and are told; afterwards the workers are idle,
+        # so rmprocs does not hit running evaluations.
+        @everywhere pids slow3(x) = (sleep(3); x^2)
+        AsyncRunner(Learner1D(x -> Main.slow3(x); bounds = (0, 1)); max_npoints = 2, executor) |> wait   # compile
+        l = Learner1D(x -> Main.slow3(x); bounds = (0, 1))
+        r = AsyncRunner(l; duration = 1, executor, drain = 30)
+        wait(r)
+        @test status(r) === :finished && npoints(l) == 2 && isempty(pending_points(l))
+
         # A worker lost mid-run surfaces as an EvaluationError, not a hang.
         @everywhere pids slow(x) = (sleep(60); x)
         l = Learner1D(x -> Main.slow(x); bounds = (0, 1))

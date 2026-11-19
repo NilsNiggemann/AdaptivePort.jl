@@ -213,7 +213,8 @@ Runners:
 - Executors are callables `executor(f, x)` returning a `fetch`-able handle, not `concurrent.futures`
   executors. The default `ThreadedExecutor` runs with `ntasks = 1` (upstream: all cores), so `f`
   need not be thread-safe unless `ntasks` is raised.
-- Goals: `tol`, `max_npoints`, `duration`, `end_time`; no custom `goal` callable. `npoints` plus the
+- Goals: `tol`, `max_npoints`, `duration`, `end_time`; no custom `goal` callable. Extra keyword `drain`: wait
+  for the evaluations in flight after a goal stop instead of dropping them (upstream cancels them). `npoints` plus the
   evaluations in flight never exceeds `max_npoints`, so it is never overshot.
 - Errors: no `retries`; the first failure stops the runner with an `EvaluationError` after telling
   the results that already arrived. Upstream wraps it in a `RuntimeError`.

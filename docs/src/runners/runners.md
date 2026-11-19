@@ -29,6 +29,10 @@ data = result(learner)
 A runner also stops when `ask` returns no points and nothing is in flight (the learner has reached its numerical
 resolution), so it cannot spin forever.
 
+At a stop, evaluations still in flight are abandoned and their results dropped. With `drain = t`, a stop at a goal
+or the deadline (not `cancel!` or a failure) first waits up to `t` seconds for them and keeps their results; no new
+points are started meanwhile. Points of slow functions are then not wasted at the end of a timed run.
+
 !!! warning "`BlockingRunner` needs a goal"
     `BlockingRunner` throws an `ArgumentError` without any goal, unless the learner has its own. An
     `AsyncRunner` without a goal runs until [`cancel!`](@ref).

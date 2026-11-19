@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New runner keyword `drain`: after a goal or deadline stop, wait up to `drain` seconds for the evaluations in flight
+  and tell their results, instead of abandoning them. With Distributed workers that are removed after the run
+  (`rmprocs`), this keeps them from being shut down while still evaluating, which can segfault them on Julia 1.12.
 - `MPIExecutor` no longer hangs when a worker rank leaves early: a rank that exits (also via `exit` inside `f`) or
   fails outside `f` reports it, and its point fails with an `EvaluationError`. New keyword `timeout` fails an
   evaluation that runs too long (a rank killed by a signal under `srun`, or stuck) and stops using its rank.
